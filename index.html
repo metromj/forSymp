@@ -1,0 +1,537 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:var(--color-background-tertiary);
+  --surface:var(--color-background-secondary);
+  --surface2:var(--color-background-primary);
+  --border:var(--color-border-tertiary);
+  --border2:var(--color-border-secondary);
+  --text:var(--color-text-primary);
+  --muted:var(--color-text-secondary);
+  --fake:#e53e3e;--correct:#38a169;--both:#d69e2e;
+  --r:10px;
+}
+body{background:transparent;color:var(--text);font-family:var(--font-sans,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif);padding:12px 0 24px;display:flex;flex-direction:column;align-items:center;}
+.page{width:100%;max-width:980px;padding:0 12px;}
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:10px;}
+@media(max-width:520px){.stats{grid-template-columns:repeat(3,1fr);}}
+.stat{background:var(--surface);border:0.5px solid var(--border);border-radius:8px;padding:8px 10px;}
+.stat-label{font-size:10px;color:var(--muted);margin-bottom:2px;text-transform:uppercase;letter-spacing:.3px;}
+.stat-val{font-size:18px;font-weight:500;}
+.sv-s{color:var(--color-text-secondary);}.sv-f{color:var(--fake);}.sv-c{color:var(--correct);}.sv-b{color:var(--both);}.sv-t{color:var(--muted);}
+
+#cw{position:relative;border:0.5px solid var(--border);border-radius:var(--r);overflow:hidden;background:var(--surface);margin-bottom:10px;}
+canvas{display:block;width:100%;background-color: #202426;}
+
+#loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface);z-index:20;gap:12px;}
+#loading p{font-size:13px;color:var(--muted);}
+.spinner{width:28px;height:28px;border:2.5px solid var(--border2);border-top-color:var(--text);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+#hint{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.6);border:0.5px solid rgba(255,255,255,0.35);border-radius:6px;padding:5px 12px;font-size:11px;color:#ddd;pointer-events:none;white-space:nowrap;transition:opacity .3s;z-index:5;}
+
+.ctrl-panel{display:flex;flex-wrap:wrap;gap:10px 18px;background:var(--surface);border:0.5px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:10px;}
+.cs{display:flex;flex-direction:column;gap:5px;min-width:145px;}
+.ct{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:500;}
+.cr{display:flex;align-items:center;gap:8px;font-size:12px;}
+.cr label{min-width:80px;color:var(--muted);}
+input[type=range]{flex:1;min-width:70px;}
+.cr span{min-width:36px;font-size:12px;font-weight:500;}
+
+#mode-bar{font-size:11px;color:var(--muted);margin-bottom:8px;min-height:15px;}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+button{font-size:12px;font-family:inherit;padding:6px 14px;border-radius:8px;border:0.5px solid var(--border2);background:transparent;color:var(--text);cursor:pointer;transition:background .1s;}
+button:hover{background:var(--surface2);}
+button:disabled{opacity:.35;cursor:not-allowed;}
+#btn-run{border-color:var(--fake);color:var(--fake);}
+#btn-step{border-color:#4299e1;color:#4299e1;}
+
+.legend{display:flex;flex-wrap:wrap;gap:7px 16px;font-size:11px;color:var(--muted);align-items:center;}
+.leg{display:flex;align-items:center;gap:5px;}
+.ldot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+
+.pick-info{display:flex;flex-direction:column;gap:5px;}
+.pick-row{display:flex;align-items:center;gap:7px;font-size:12px;}
+.badge{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;flex-shrink:0;}
+.bf{background:var(--fake);color:#fff;}
+.bc{background:var(--correct);color:#fff;}
+.pv{font-weight:500;color:var(--text);}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="stats">
+    <div class="stat"><div class="stat-label">No Data</div><div class="stat-val sv-s" id="s-sus">—</div></div>
+    <div class="stat"><div class="stat-label">Disinformation</div><div class="stat-val sv-f" id="s-fake">—</div></div>
+    <div class="stat"><div class="stat-label">Fact-checked</div><div class="stat-val sv-c" id="s-cor">—</div></div>
+    <div class="stat"><div class="stat-label">Cured</div><div class="stat-val sv-b" id="s-both">—</div></div>
+    <div class="stat"><div class="stat-label">Steps</div><div class="stat-val sv-t" id="s-step">0</div></div>
+  </div>
+
+  <div id="cw">
+    <canvas id="c"></canvas>
+    <div id="loading"><div class="spinner"></div><p id="load-msg">Calculating…</p></div>
+    <div id="hint">Click nodes ① Disinformation Source → ② Fact-checking Source</div>
+  </div>
+
+  <div id="mode-bar">Calculating…</div>
+
+  <div class="ctrl-panel">
+    <div class="cs">
+      <div class="ct">Network</div>
+      <div class="cr"><label>Number of nodes</label><input type="range" id="sl-n" min="30" max="150" value="100" step="1"><span id="lbl-n">100</span></div>
+      <div class="cr"><label>Number of connections(m₀)</label><input type="range" id="sl-m" min="1" max="5" value="2" step="1"><span id="lbl-m">2</span></div>
+    </div>
+    <div class="cs">
+      <div class="ct">Probability of spreading <span style="font-size:9px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(p × ln(number of connections + 1))</span></div>
+      <div class="cr"><label>Disinformation</label><input type="range" id="sl-fp" min="0.05" max="1" value="0.40" step="0.05"><span id="lbl-fp">0.40</span></div>
+      <div class="cr"><label>Fact-checks</label><input type="range" id="sl-cp" min="0.05" max="1" value="0.25" step="0.05"><span id="lbl-cp">0.25</span></div>
+    </div>
+    <div class="cs">
+      <div class="ct">Timing</div>
+      <div class="cr"><label>of Fact-check information(t=)</label><input type="range" id="sl-cd" min="0" max="10" value="1" step="1"><span id="lbl-cd">1</span></div>
+      <div class="cr"><label>Automatic velocity</label><input type="range" id="sl-spd" min="100" max="1500" value="600" step="100"><span id="lbl-spd">600ms</span></div>
+    </div>
+    <div class="cs">
+      <div class="ct">Selected nodes</div>
+      <div class="pick-info">
+        <div class="pick-row"><span class="badge bf">F</span><span class="pv" id="fnode">None</span></div>
+        <div class="pick-row"><span class="badge bc">C</span><span class="pv" id="cnode">None</span></div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px;">Click: Disinformation → Fact-check</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button id="btn-run" disabled>▶ Auto Start</button>
+    <button id="btn-step" disabled>Increment Step</button>
+    <button id="btn-reset" disabled>⟳ Reset Run</button>
+    <button id="btn-rebuild">↺ Regenerate Network</button>
+  </div>
+
+  <div class="legend">
+    <span style="font-weight:500;color:var(--text)">Node Color-coding:</span>
+    <span class="leg"><span class="ldot" style="background:#4a5568"></span>No Data</span>
+    <span class="leg"><span class="ldot" style="background:#e53e3e"></span>Disinformation</span>
+    <span class="leg"><span class="ldot" style="background:#38a169"></span>Fact-checked</span>
+    <span class="leg"><span class="ldot" style="background:#d69e2e"></span>Cured</span>
+    <span class="leg"><span class="ldot" style="background:#3182ce"></span>Source Node</span>
+    <span class="leg"><span class="ldot" style="background:#319795"></span>Waiting for Fact-check</span>
+  </div>
+</div>
+
+<script>
+const canvas  = document.getElementById('c');
+const ctx     = canvas.getContext('2d');
+const cw      = document.getElementById('cw');
+const loadEl  = document.getElementById('loading');
+const loadMsg = document.getElementById('load-msg');
+const hintEl  = document.getElementById('hint');
+const modeEl  = document.getElementById('mode-bar');
+
+/* 상태 정의:
+   S=0 미감염
+   F=1 거짓 정보만 접함 (거짓 전파 가능)
+   CO=2 정정 보도 접함 (면역 — 거짓 전파 불가)
+   B=3 거짓이었다가 정정됨 (교정 완료 — 거짓 전파 불가)
+*/
+const S=0, F=1, CO=2, B=3;
+let W, H, nodes=[], edges=[], adj=[];
+let step=0, pickPhase=0, fakeSource=-1, corSource=-1;
+let autoTimer=null, corActivated=false;
+
+function resize() {
+  const rect = cw.getBoundingClientRect();
+  W = rect.width;
+  H = Math.max(460, Math.min(620, W * 0.65));
+  canvas.width  = Math.round(W * devicePixelRatio);
+  canvas.height = Math.round(H * devicePixelRatio);
+  canvas.style.height = H + 'px';
+  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+}
+
+function buildTopology(n, m) {
+  nodes=[]; edges=[]; adj=[];
+  for(let i=0;i<n;i++){
+    nodes.push({id:i,x:0,y:0,vx:0,vy:0,deg:0,state:S});
+    adj.push([]);
+  }
+  const initN=Math.max(m+1,4);
+  for(let i=0;i<initN;i++)
+    for(let j=i+1;j<initN;j++)
+      if(Math.random()<0.6) addEdge(i,j);
+  for(let i=initN;i<n;i++){
+    const td=nodes.slice(0,i).reduce((s,nd)=>s+nd.deg,0)||1;
+    const tgt=new Set(); let tr=0;
+    while(tgt.size<Math.min(m,i)&&tr<3000){
+      tr++;
+      let r=Math.random()*td,cum=0;
+      for(let j=0;j<i;j++){cum+=nodes[j].deg;if(r<=cum){tgt.add(j);break;}}
+    }
+    for(const t of tgt) addEdge(i,t);
+  }
+}
+function addEdge(i,j){
+  edges.push([i,j]);
+  nodes[i].deg++;nodes[j].deg++;
+  adj[i].push(j);adj[j].push(i);
+}
+
+function computeLayout() {
+  const n = nodes.length;
+  const CX = W / 2, CY = H / 2;
+  const pad = 35;
+
+  const maxDeg = Math.max(...nodes.map(nd => nd.deg), 1);
+  const sorted = [...nodes].sort((a, b) => b.deg - a.deg);
+  sorted.forEach((nd, idx) => {
+    const t = nd.deg / maxDeg;
+    const maxR = Math.min(W, H) * 0.36 - pad;
+    const r = maxR * (1 - t * 0.8);
+    const angle = (idx / n) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+    nd.x = CX + r * Math.cos(angle);
+    nd.y = CY + r * Math.sin(angle);
+    nd.vx = 0; nd.vy = 0;
+  });
+
+  const TICKS = 900;
+  for (let tick = 0; tick < TICKS; tick++) {
+    const alpha = Math.max(0.008, 1 - tick / TICKS);
+    const rep   = 140 * alpha;
+    const att   = 0.08 * alpha;
+    const grav  = 0.055 * alpha;
+    const idealLen = 45;
+
+    for (const nd of nodes) {
+      nd.vx += (CX - nd.x) * grav;
+      nd.vy += (CY - nd.y) * grav;
+    }
+
+    for (let i = 0; i < n; i++) {
+      const a = nodes[i];
+      for (let j = i + 1; j < n; j++) {
+        const b = nodes[j];
+        const dx = a.x - b.x, dy = a.y - b.y;
+        const d2 = dx * dx + dy * dy + 0.01;
+        const f = rep / d2;
+        a.vx += dx * f; a.vy += dy * f;
+        b.vx -= dx * f; b.vy -= dy * f;
+      }
+    }
+
+    for (const [i, j] of edges) {
+      const a = nodes[i], b = nodes[j];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.sqrt(dx * dx + dy * dy) || 1;
+      const f = (d - idealLen) * att;
+      const fx = dx / d * f, fy = dy / d * f;
+      a.vx += fx; a.vy += fy;
+      b.vx -= fx; b.vy -= fy;
+    }
+
+    const margin = 45;
+    for (const nd of nodes) {
+      if (nd.x < margin)       nd.vx += (margin - nd.x) * 0.18;
+      if (nd.x > W - margin)   nd.vx -= (nd.x - (W - margin)) * 0.18;
+      if (nd.y < margin)       nd.vy += (margin - nd.y) * 0.18;
+      if (nd.y > H - margin)   nd.vy -= (nd.y - (H - margin)) * 0.18;
+    }
+
+    for (const nd of nodes) {
+      nd.vx *= 0.65;
+      nd.vy *= 0.65;
+      nd.x += nd.vx;
+      nd.y += nd.vy;
+      nd.x = Math.max(pad, Math.min(W - pad, nd.x));
+      nd.y = Math.max(pad, Math.min(H - pad, nd.y));
+    }
+  }
+
+  for (const nd of nodes) { nd.vx = 0; nd.vy = 0; }
+
+  const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const shiftX = CX - (minX + maxX) / 2;
+  const shiftY = CY - (minY + maxY) / 2;
+  for (const nd of nodes) {
+    nd.x = Math.max(pad, Math.min(W - pad, nd.x + shiftX));
+    nd.y = Math.max(pad, Math.min(H - pad, nd.y + shiftY));
+  }
+}
+
+function nodeRadius(nd){ return Math.min(4 + nd.deg * 1.1, 22); }
+function nodeColor(nd){
+  if(nd.id===fakeSource) return '#3182ce';
+  if(nd.id===corSource && !corActivated) return '#319795';
+  if(nd.id===corSource) return '#3182ce';
+  switch(nd.state){
+    case S:  return '#4a5568';
+    case F:  return '#e53e3e';
+    case CO: return '#38a169';
+    case B:  return '#d69e2e';
+  }
+}
+function edgeAlpha(i,j){
+  const a=nodes[i].state, b=nodes[j].state;
+  if(a===F&&b===F) return 'rgba(229,62,62,0.45)';
+  if((a===CO||a===B)&&(b===CO||b===B)) return 'rgba(56,161,105,0.45)';
+  return 'rgba(128,128,128,0.08)';
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  for(const [i,j] of edges){
+    ctx.beginPath();
+    ctx.moveTo(nodes[i].x, nodes[i].y);
+    ctx.lineTo(nodes[j].x, nodes[j].y);
+    ctx.strokeStyle = edgeAlpha(i,j);
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+  }
+  for(const nd of nodes){
+    const r = nodeRadius(nd);
+    const col = nodeColor(nd);
+    const isSrc = nd.id===fakeSource || nd.id===corSource;
+    ctx.beginPath(); ctx.arc(nd.x, nd.y, r, 0, Math.PI*2);
+    ctx.fillStyle = col;
+    ctx.globalAlpha = isSrc ? 1 : 0.88;
+    ctx.fill(); ctx.globalAlpha = 1;
+    if(isSrc){
+      ctx.beginPath(); ctx.arc(nd.x, nd.y, r+3, 0, Math.PI*2);
+      const rc = nd.id===fakeSource ? 'rgba(229,62,62,0.9)'
+                : (!corActivated&&nd.id===corSource) ? 'rgba(49,151,149,0.9)'
+                : 'rgba(56,161,105,0.9)';
+      ctx.strokeStyle = rc;
+      ctx.lineWidth = 1.8; ctx.stroke();
+    }
+    if(nd.deg > 8){
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.font = `500 ${Math.min(8+Math.round((nd.deg-8)*0.35),12)}px sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(nd.deg, nd.x, nd.y);
+    } else {
+      ctx.fillStyle = 'rgba(200,200,200,0.5)';
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(nd.id, nd.x, nd.y + nodeRadius(nd) + 6);
+    }
+  }
+  updateStats();
+}
+
+function simStep(){
+  if(fakeSource<0||corSource<0) return;
+
+  const corrDelay = parseInt(document.getElementById('sl-cd').value);
+  if(!corActivated && step >= corrDelay) {
+    corActivated = true;
+    nodes[corSource].state = CO;
+  }
+
+  const next = nodes.map(nd => nd.state);
+  const fp = parseFloat(document.getElementById('sl-fp').value);
+  const cp = parseFloat(document.getElementById('sl-cp').value);
+
+  for(let i=0; i<nodes.length; i++){
+    const cur = nodes[i].state;
+    let gf=false, gc=false;
+
+    for(const j of adj[i]){
+      const ns = nodes[j].state;
+      const logFactor = Math.log(nodes[j].deg + 1);
+      const actualFp = Math.min(1, fp * logFactor);
+      const actualCp = Math.min(1, cp * logFactor);
+
+      /* 거짓 정보는 F 상태인 이웃에서만 전파 (CO, B는 거짓 전파 안 함) */
+      if(ns===F && Math.random()<actualFp) gf=true;
+      /* 정정 보도는 CO 또는 B 상태인 이웃에서 전파 */
+      if((ns===CO||ns===B) && Math.random()<actualCp) gc=true;
+    }
+
+    if(cur===S){
+      if(gc) next[i]=CO;        /* 정정을 먼저/동시에 접하면 면역 (거짓 차단) */
+      else if(gf) next[i]=F;
+    } else if(cur===F && gc) {
+      next[i]=B;               /* 거짓 접한 사람이 정정 들으면 교정됨(노란색) */
+    }
+    /* CO, B 상태는 변하지 않음 — 한번 정정 접하면 거짓 전파 불가 */
+  }
+
+  for(let i=0;i<nodes.length;i++) nodes[i].state=next[i];
+  step++;
+  document.getElementById('s-step').textContent = step;
+
+  if(!corActivated) {
+    const remaining = corrDelay - step;
+    modeEl.textContent = `▶ Running… Time until fact-check starts: t=${corrDelay}, steps until fact-check starts: (${remaining} steps)`;
+  } else {
+    modeEl.textContent = `▶ Running… (Fact-check Activated)`;
+  }
+
+  draw();
+}
+
+function updateStats(){
+  let s=0,f=0,c=0,b=0;
+  for(const nd of nodes){
+    if(nd.state===S) s++;
+    else if(nd.state===F) f++;
+    else if(nd.state===CO) c++;
+    else b++;
+  }
+  document.getElementById('s-sus').textContent = s;
+  document.getElementById('s-fake').textContent = f;
+  document.getElementById('s-cor').textContent = c;
+  document.getElementById('s-both').textContent = b;
+  return {s,f,c,b};
+}
+
+function checkEndCondition(){
+  let c=0, b=0;
+  const total = nodes.length;
+  for(const nd of nodes){
+    if(nd.state===CO) c++;
+    else if(nd.state===B) b++;
+  }
+  const correctedRatio = (c + b) / total;
+  if(correctedRatio >= 0.9) return true;
+  return false;
+}
+
+canvas.addEventListener('click', function(e){
+  if(pickPhase===2) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  for(const nd of nodes){
+    const r = nodeRadius(nd);
+    if(Math.sqrt((nd.x-mx)**2+(nd.y-my)**2) <= r+6){
+      if(pickPhase===0){
+        fakeSource=nd.id; nd.state=F;
+        document.getElementById('fnode').textContent=`Node ${nd.id} (${nd.deg} Connections)`;
+        modeEl.textContent='✓ Disinformation source selected. Select fact-check source.';
+        pickPhase=1;
+      } else if(pickPhase===1 && nd.id!==fakeSource){
+        corSource=nd.id;
+        const corrDelay = parseInt(document.getElementById('sl-cd').value);
+        if(corrDelay === 0) {
+          nd.state=CO; corActivated=true;
+          modeEl.textContent='✓ Source selected. Fact-checking starts immediately. Click the auto start button.';
+        } else {
+          nd.state=S; corActivated=false;
+          modeEl.textContent=`✓ Source selected. Fact-checking starts on t=${corrDelay}.`;
+        }
+        document.getElementById('cnode').textContent=`Node ${nd.id} (${nd.deg} Connections)`;
+        pickPhase=2;
+        document.getElementById('btn-run').disabled=false;
+        document.getElementById('btn-step').disabled=false;
+        document.getElementById('btn-reset').disabled=false;
+        hintEl.style.opacity='0';
+      }
+      draw(); return;
+    }
+  }
+});
+
+const btnRun = document.getElementById('btn-run');
+btnRun.addEventListener('click', function(){
+  if(autoTimer){
+    clearInterval(autoTimer); autoTimer=null;
+    btnRun.textContent='▶ Auto Start';
+  } else {
+    const ms = parseInt(document.getElementById('sl-spd').value);
+    autoTimer = setInterval(()=>{
+      simStep();
+      if(checkEndCondition()){
+        clearInterval(autoTimer); autoTimer=null;
+        btnRun.textContent='▶ Auto Start';
+        const total = nodes.length;
+        let c=0,b=0;
+        for(const nd of nodes){ if(nd.state===CO) c++; else if(nd.state===B) b++; }
+        modeEl.textContent = `✅ Finished! Fact-checking Range: ${c+b}/${total} People (${Math.round((c+b)/total*100)}%) — ${step} Steps`;
+      }
+    }, ms);
+    btnRun.textContent='⏹ Stop';
+  }
+});
+
+document.getElementById('btn-step').addEventListener('click', ()=>{
+  simStep();
+  if(checkEndCondition()){
+    if(autoTimer){ clearInterval(autoTimer); autoTimer=null; btnRun.textContent='▶ Auto Start'; }
+    const total = nodes.length;
+    let c=0,b=0;
+    for(const nd of nodes){ if(nd.state===CO) c++; else if(nd.state===B) b++; }
+    modeEl.textContent = `✅ Finished! Fact-checking Range: ${c+b}/${total} People (${Math.round((c+b)/total*100)}%) — ${step} Steps`;
+  }
+});
+
+document.getElementById('btn-reset').addEventListener('click', function(){
+  if(autoTimer){ clearInterval(autoTimer); autoTimer=null; btnRun.textContent='▶ Auto Start'; }
+  for(const nd of nodes) nd.state=S;
+  if(fakeSource>=0) nodes[fakeSource].state=F;
+  if(corSource>=0){
+    const corrDelay = parseInt(document.getElementById('sl-cd').value);
+    if(corrDelay === 0){ nodes[corSource].state=CO; corActivated=true; }
+    else { nodes[corSource].state=S; corActivated=false; }
+  }
+  step=0; document.getElementById('s-step').textContent=0;
+  draw();
+  const corrDelay = parseInt(document.getElementById('sl-cd').value);
+  modeEl.textContent = corrDelay===0 ? '⟳ Reset complete.' : `⟳ Reset complete. Fact-check starts on t=${corrDelay}.`;
+});
+
+document.getElementById('btn-rebuild').addEventListener('click', ()=>init());
+
+document.getElementById('sl-n').oninput=e=>document.getElementById('lbl-n').textContent=e.target.value;
+document.getElementById('sl-m').oninput=e=>document.getElementById('lbl-m').textContent=e.target.value;
+document.getElementById('sl-fp').oninput=e=>document.getElementById('lbl-fp').textContent=parseFloat(e.target.value).toFixed(2);
+document.getElementById('sl-cp').oninput=e=>document.getElementById('lbl-cp').textContent=parseFloat(e.target.value).toFixed(2);
+document.getElementById('sl-cd').oninput=e=>document.getElementById('lbl-cd').textContent=e.target.value;
+document.getElementById('sl-spd').oninput=e=>document.getElementById('lbl-spd').textContent=e.target.value+'ms';
+
+function init(){
+  if(autoTimer){ clearInterval(autoTimer); autoTimer=null; btnRun.textContent='▶ Auto Start'; }
+  fakeSource=-1; corSource=-1; step=0; pickPhase=0; corActivated=false;
+  document.getElementById('fnode').textContent='None';
+  document.getElementById('cnode').textContent='None';
+  document.getElementById('btn-run').disabled=true;
+  document.getElementById('btn-step').disabled=true;
+  document.getElementById('btn-reset').disabled=true;
+  document.getElementById('s-step').textContent=0;
+  hintEl.style.opacity='1';
+  loadEl.style.display='flex';
+  loadMsg.textContent='Calculating…';
+  modeEl.textContent='Calculating…';
+  setTimeout(()=>{
+    resize();
+    const n = parseInt(document.getElementById('sl-n').value);
+    const m = parseInt(document.getElementById('sl-m').value);
+    buildTopology(n, m);
+    computeLayout();
+    loadEl.style.display='none';
+    draw();
+    updateStats();
+    modeEl.textContent='▶ Click a node to select the disinformation source.';
+  }, 30);
+}
+
+window.addEventListener('resize', ()=>{
+  if(nodes.length===0) return;
+  const oldW=W, oldH=H;
+  resize();
+  const sx=W/oldW, sy=H/oldH;
+  for(const nd of nodes){ nd.x*=sx; nd.y*=sy; }
+  draw();
+});
+
+init();
+</script>
+</body>
+</html>
