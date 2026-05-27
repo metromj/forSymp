@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Parallel Execution — Disinformation Spread</title>
+<style>
+body{
+border-top: 10px solid #3182ce;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:var(--color-background-tertiary);
+  --surface:var(--color-background-secondary);
+  --surface2:var(--color-background-primary);
+  --border:var(--color-border-tertiary);
+  --border2:var(--color-border-secondary);
+  --text:var(--color-text-primary);
+  --muted:var(--color-text-secondary);
+  --fake:#e53e3e;--correct:#38a169;--both:#d69e2e;--sus:#4a5568;
+  --r:10px;
+  --accent:#805ad5;
+}
+body{
+  background:transparent;
+  color:var(--text);
+  font-family:var(--font-sans,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif);
+  padding:12px 0 24px;
+  display:flex;flex-direction:column;align-items:center;
+}
+.page{width:100%;max-width:1100px;padding:0 14px;}
+
+/* ── header ── */
+.navigation{
+  list-style: none;
+}
+
+nav ul{
+  display: flex;
+  flex-direction: row;
+  padding: 10px;
+}
+
+nav a{
+  margin: 20px;
+}
+
+nav a:link{
+  color: #3182ce;
+  text-decoration: none;
+}
+
+nav a:visited{
+  color:#3182ce;
+}
+
+/* ── upload zone ── */
+.upload-section{
+  background:var(--surface);
+  border:0.5px solid var(--border);
+  border-radius:var(--r);
+  padding:18px 18px 14px;
+  margin-bottom:12px;
+}
+.upload-title{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:10px;font-weight:500;}
+.slots-grid{
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:8px;
+  margin-bottom:12px;
+}
+@media(max-width:640px){.slots-grid{grid-template-columns:repeat(2,1fr);}}
+.slot{
+  background:var(--surface2);
+  border:0.5px dashed var(--border2);
+  border-radius:8px;
+  padding:8px 10px;
+  cursor:pointer;
+  transition:border-color .15s, background .15s;
+  min-height:64px;
+  display:flex;flex-direction:column;justify-content:space-between;
+  position:relative;
+  overflow:hidden;
+}
+.slot:hover{border-color:var(--accent);background:#e2d9ff;}
+.slot.loaded{border-color:var(--accent);border-style:solid;}
+.slot.loaded:hover{background:#1e1a2a;}
+.slot-num{font-size:9px;color:var(--muted);letter-spacing:.5px;font-weight:500;}
+.slot-name{font-size:10px;color:var(--text);word-break:break-all;margin-top:4px;line-height:1.3;}
+.slot-meta{font-size:9px;color:var(--muted);margin-top:2px;}
+.slot-clear{
+  position:absolute;top:4px;right:5px;
+  font-size:11px;color:var(--muted);
+  cursor:pointer;line-height:1;
+  display:none;
+}
+.slot.loaded .slot-clear{display:block;}
+.slot-clear:hover{color:var(--fake);}
+.slot-empty-label{font-size:9px;color:var(--muted);margin-top:auto;padding-top:6px;opacity:.6;}
+
+.slot-color{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px;flex-shrink:0;vertical-align:middle;}
+
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+button{
+  font-size:12px;font-family:inherit;
+  padding:6px 14px;border-radius:8px;
+  border:0.5px solid var(--border2);
+  background:transparent;color:var(--text);
+  cursor:pointer;transition:background .1s;
+}
+button:hover{background:var(--surface2);}
+button:disabled{opacity:.35;cursor:not-allowed;}
+#btn-run-all{border-color:var(--fake);color:var(--fake);}
+#btn-export-all{border-color:#38a169;color:#38a169;}
+#btn-clear-all{border-color:var(--muted);color:var(--muted);}
+.status-msg{font-size:11px;color:var(--accent);font-style:italic;margin-left:6px;}
+
+/* ── summary stats ── */
+.summary-bar{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:8px;
+  margin-bottom:12px;
+}
+@media(max-width:520px){.summary-bar{grid-template-columns:repeat(2,1fr);}}
+.sum-stat{
+  background:var(--surface);
+  border:0.5px solid var(--border);
+  border-radius:8px;
+  padding:8px 12px;
+}
+.sum-label{font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:2px;}
+.sum-val{font-size:15px;font-weight:500;}
+.sv-f{color:var(--fake);}.sv-c{color:var(--correct);}.sv-b{color:var(--both);}.sv-s{color:var(--muted);}
+
+/* ── graphs ── */
+.graphs-section{display:flex;flex-direction:column;gap:12px;}
+
+.run-card{
+  background:var(--surface);
+  border:0.5px solid var(--border);
+  border-radius:var(--r);
+  overflow:hidden;
+  transition:border-color .2s;
+}
+.run-card.active{border-color:var(--accent);}
+
+.run-card-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 14px;
+  border-bottom:0.5px solid var(--border);
+  flex-wrap:wrap;gap:6px;
+}
+.run-label{
+  display:flex;align-items:center;gap:8px;
+  font-size:11px;font-weight:500;
+}
+.run-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.run-filename{color:var(--muted);font-size:10px;font-weight:400;margin-left:2px;}
+
+.run-stats{
+  display:flex;gap:14px;font-size:10px;flex-wrap:wrap;
+}
+.rs{display:flex;align-items:center;gap:4px;}
+.rs-dot{width:7px;height:7px;border-radius:50%;}
+
+.run-graph-wrap{
+  position:relative;
+  background:#181b1d;
+}
+canvas.run-graph{display:block;width:100%;}
+
+.run-card.empty .run-graph-wrap{
+  height:80px;
+  display:flex;align-items:center;justify-content:center;
+}
+.empty-hint{font-size:11px;color:var(--muted);opacity:.5;}
+
+/* ── combined chart ── */
+.combined-section{
+  background:var(--surface);
+  border:0.5px solid var(--border);
+  border-radius:var(--r);
+  overflow:hidden;
+  margin-bottom:12px;
+}
+.combined-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 14px;
+  border-bottom:0.5px solid var(--border);
+  flex-wrap:wrap;gap:6px;
+}
+.combined-title{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);}
+.combined-legend{display:flex;gap:12px;font-size:10px;flex-wrap:wrap;}
+.cl-item{display:flex;align-items:center;gap:5px;}
+.cl-dot{width:8px;height:3px;border-radius:2px;}
+
+#combined-wrap{background:#181b1d;}
+#combined-canvas{display:block;width:100%;}
+
+/* ── toast ── */
+.toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  background:rgba(30,30,30,0.92);
+  border:0.5px solid rgba(128,90,213,0.6);
+  border-radius:8px;padding:8px 18px;
+  font-size:12px;color:#c4b5fd;
+  pointer-events:none;opacity:0;transition:opacity .3s;
+  z-index:999;white-space:nowrap;
+}
+.toast.show{opacity:1;}
+
+/* ── legend ── */
+.legend-row{
+  display:flex;flex-wrap:wrap;gap:7px 16px;font-size:10px;
+  color:var(--muted);align-items:center;
+  padding:8px 14px;
+  border-top:0.5px solid var(--border);
+}
+.leg{display:flex;align-items:center;gap:5px;}
+.ldot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+</style>
+</head>
+<body>
+<header>
+<h1>Disinformation Spread Visualization</h1>
+<nav>
+<ul>
+<li class="navigation"><a href="index.html">Main</a></li>
+<li class="navigation"><a href="parallel.html"><b>Parallel Execution</b></a></li>
+</ul>
+</nav>
+</header>
+
+<div class="page">
+
+  <!-- Upload section -->
+  <div class="upload-section">
+    <div class="upload-title">Load Run JSON Files (up to 10)</div>
+    <div class="slots-grid" id="slots-grid">
+      <!-- Slots injected by JS -->
+    </div>
+    <div class="btn-row">
+      <button id="btn-run-all" disabled>▶ Simulate All</button>
+      <button id="btn-export-all" disabled>⬇ Export All Graphs (PNG)</button>
+      <button id="btn-clear-all">✕ Clear All</button>
+      <span class="status-msg" id="status-msg"></span>
+    </div>
+  </div>
+
+  <!-- Summary stats (across all loaded runs, after simulation) -->
+  <div class="summary-bar">
+    <div class="sum-stat"><div class="sum-label">Avg Final Disinformation</div><div class="sum-val sv-f" id="sum-f">—</div></div>
+    <div class="sum-stat"><div class="sum-label">Avg Final Fact-checked</div><div class="sum-val sv-c" id="sum-c">—</div></div>
+    <div class="sum-stat"><div class="sum-label">Avg Final Cured</div><div class="sum-val sv-b" id="sum-b">—</div></div>
+    <div class="sum-stat"><div class="sum-label">Avg Steps to 90%</div><div class="sum-val sv-s" id="sum-steps">—</div></div>
+  </div>
+
+  <!-- Combined overlay chart -->
+  <div class="combined-section">
+    <div class="combined-header">
+      <span class="combined-title">All Runs — Disinformation Spread (Overlay)</span>
+      <div class="combined-legend">
+        <div class="cl-item"><div class="cl-dot" style="background:#e53e3e"></div><span style="color:#e53e3e">Disinformation</span></div>
+        <div class="cl-item"><div class="cl-dot" style="background:#38a169"></div><span style="color:#38a169">Fact-checked</span></div>
+        <div class="cl-item"><div class="cl-dot" style="background:#d69e2e"></div><span style="color:#d69e2e">Cured</span></div>
+      </div>
+    </div>
+    <div id="combined-wrap"><canvas id="combined-canvas"></canvas></div>
+  </div>
+
+  <!-- Individual run cards -->
+  <div class="graphs-section" id="graphs-section"></div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="file-input" accept=".json,application/json" style="display:none">
+
+<script>
+// ─────────────────────────────────────────
+// Constants & palette
+// ─────────────────────────────────────────
+const MAX_RUNS = 10;
+const S=0, F=1, CO=2, B=3;
+
+// Per-run accent colors (hue-shifted palette)
+const RUN_COLORS = [
+  '#e53e3e','#ed8936','#d69e2e','#38a169','#3182ce',
+  '#805ad5','#d53f8c','#319795','#718096','#b7791f',
+];
+
+// ─────────────────────────────────────────
+// State
+// ─────────────────────────────────────────
+const runs = Array.from({length: MAX_RUNS}, (_, i) => ({
+  slot: i,
+  file: null,
+  data: null,        // parsed JSON
+  simulated: false,
+  histF: [], histCO: [], histB: [], histS: [],
+  finalSteps: 0,
+  canvas: null,
+  ctx: null,
+  GW: 0, GH: 180,
+}));
+
+let currentPickSlot = -1; // which slot is awaiting a file pick
+
+// ─────────────────────────────────────────
+// Toast
+// ─────────────────────────────────────────
+function showToast(msg, dur=2800){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),dur);
+}
+
+// ─────────────────────────────────────────
+// Build slot grid & run cards
+// ─────────────────────────────────────────
+function buildUI(){
+  const grid = document.getElementById('slots-grid');
+  grid.innerHTML = '';
+  runs.forEach(run => {
+    const div = document.createElement('div');
+    div.className = 'slot' + (run.data ? ' loaded' : '');
+    div.dataset.slot = run.slot;
+    div.innerHTML = `
+      <div style="display:flex;align-items:center;gap:5px;">
+        <span class="slot-color" style="background:${RUN_COLORS[run.slot]}"></span>
+        <span class="slot-num">Run ${run.slot+1}</span>
+      </div>
+      ${run.data
+        ? `<div class="slot-name">${run.file}</div>
+           <div class="slot-meta">${run.data.nodes.length} nodes · ${run.data.edges.length} edges</div>`
+        : `<div class="slot-empty-label">Click to load JSON</div>`
+      }
+      <span class="slot-clear" title="Remove">✕</span>
+    `;
+    div.addEventListener('click', e => {
+      if(e.target.classList.contains('slot-clear')){
+        clearSlot(run.slot);
+        return;
+      }
+      currentPickSlot = run.slot;
+      document.getElementById('file-input').click();
+    });
+    grid.appendChild(div);
+  });
+  buildCards();
+  updateButtons();
+}
+
+function buildCards(){
+  const sec = document.getElementById('graphs-section');
+  sec.innerHTML = '';
+  runs.forEach(run => {
+    const card = document.createElement('div');
+    card.className = 'run-card' + (run.data ? '' : ' empty');
+    card.id = `run-card-${run.slot}`;
+
+    const color = RUN_COLORS[run.slot];
+    const statsHtml = run.simulated
+      ? `<div class="run-stats">
+           <div class="rs"><span class="rs-dot" style="background:#e53e3e"></span>F:${run.histF[run.histF.length-1]||0}</div>
+           <div class="rs"><span class="rs-dot" style="background:#38a169"></span>C:${run.histCO[run.histCO.length-1]||0}</div>
+           <div class="rs"><span class="rs-dot" style="background:#d69e2e"></span>B:${run.histB[run.histB.length-1]||0}</div>
+           <div class="rs" style="color:var(--muted)">Steps: ${run.finalSteps}</div>
+         </div>`
+      : `<div style="font-size:10px;color:var(--muted)">${run.data ? 'Ready to simulate' : 'No data loaded'}</div>`;
+
+    card.innerHTML = `
+      <div class="run-card-header">
+        <div class="run-label">
+          <span class="run-dot" style="background:${color}"></span>
+          <span>Run ${run.slot+1}</span>
+          ${run.file ? `<span class="run-filename">${run.file}</span>` : ''}
+        </div>
+        ${statsHtml}
+      </div>
+      <div class="run-graph-wrap" id="wrap-${run.slot}">
+        ${run.data
+          ? `<canvas class="run-graph" id="gc-${run.slot}"></canvas>`
+          : `<div class="empty-hint">No JSON loaded</div>`
+        }
+      </div>
+    `;
+    sec.appendChild(card);
+
+    if(run.data){
+      const cv = document.getElementById(`gc-${run.slot}`);
+      run.canvas = cv;
+      resizeRunCanvas(run);
+      if(run.simulated) drawRunGraph(run);
+      else drawRunGraphEmpty(run);
+    }
+  });
+}
+
+function resizeRunCanvas(run){
+  if(!run.canvas) return;
+  const wrap = document.getElementById(`wrap-${run.slot}`);
+  if(!wrap) return;
+  run.GW = wrap.getBoundingClientRect().width || 900;
+  run.GH = 180;
+  run.canvas.width  = Math.round(run.GW * devicePixelRatio);
+  run.canvas.height = Math.round(run.GH * devicePixelRatio);
+  run.canvas.style.height = run.GH + 'px';
+  run.ctx = run.canvas.getContext('2d');
+  run.ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+}
+
+function updateButtons(){
+  const hasAny = runs.some(r => r.data);
+  document.getElementById('btn-run-all').disabled = !hasAny;
+  const hasResults = runs.some(r => r.simulated);
+  document.getElementById('btn-export-all').disabled = !hasResults;
+}
+
+// ─────────────────────────────────────────
+// File loading
+// ─────────────────────────────────────────
+document.getElementById('file-input').addEventListener('change', function(e){
+  const file = e.target.files[0];
+  if(!file || currentPickSlot < 0) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if(!data.nodes || !data.edges) throw new Error('missing nodes/edges');
+      const run = runs[currentPickSlot];
+      run.file = file.name;
+      run.data = data;
+      run.simulated = false;
+      run.histF=[]; run.histCO=[]; run.histB=[]; run.histS=[];
+      buildUI();
+      showToast(`✓ Run ${currentPickSlot+1} loaded: ${file.name}`);
+    } catch(err){
+      showToast(`✗ Run ${currentPickSlot+1}: Invalid JSON`);
+    }
+    e.target.value='';
+  };
+  reader.readAsText(file);
+});
+
+function clearSlot(slot){
+  const run = runs[slot];
+  run.file=null; run.data=null; run.simulated=false;
+  run.histF=[]; run.histCO=[]; run.histB=[]; run.histS=[];
+  run.finalSteps=0;
+  buildUI();
+  drawCombined();
+  updateSummary();
+}
+
+document.getElementById('btn-clear-all').addEventListener('click', ()=>{
+  runs.forEach(r => {
+    r.file=null; r.data=null; r.simulated=false;
+    r.histF=[]; r.histCO=[]; r.histB=[]; r.histS=[]; r.finalSteps=0;
+  });
+  buildUI();
+  drawCombined();
+  updateSummary();
+  showToast('✓ All slots cleared');
+});
+
+// ─────────────────────────────────────────
+// Simulation
+// ─────────────────────────────────────────
+document.getElementById('btn-run-all').addEventListener('click', ()=>{
+  const toRun = runs.filter(r => r.data);
+  if(!toRun.length){ showToast('⚠ No JSON files loaded'); return; }
+  setStatus(`Simulating ${toRun.length} run(s)…`);
+  // Small timeout so browser paints status first
+  setTimeout(()=>{
+    toRun.forEach(run => simulateRun(run));
+    buildCards();
+    drawCombined();
+    updateSummary();
+    setStatus(`✓ Done — ${toRun.length} run(s) simulated`);
+    document.getElementById('btn-export-all').disabled = false;
+    showToast(`✓ Simulated ${toRun.length} run(s)`);
+  }, 20);
+});
+
+function simulateRun(run){
+  const d = run.data;
+  const n = d.nodes.length;
+  const settings = d.settings || {};
+  const fp         = settings.fakeProb    ?? 0.40;
+  const cp         = settings.correctProb ?? 0.25;
+  const corrDelay  = settings.corrDelay   ?? 1;
+  const MAX_STEPS  = 200;
+
+  // Build node + adj structures
+  const nodes = d.nodes.map(nd => ({
+    id: nd.id, deg: nd.deg || 0, state: S,
+  }));
+  const idMap = {};
+  nodes.forEach((nd,i)=>idMap[nd.id]=i);
+  const adj = nodes.map(()=>[]);
+  for(const e of d.edges){
+    const ai=idMap[e[0]], bi=idMap[e[1]];
+    if(ai===undefined||bi===undefined) continue;
+    adj[ai].push(bi); adj[bi].push(ai);
+  }
+  // Recompute deg from adjacency if missing
+  const hasDeg = d.nodes.some(nd=>nd.deg>0);
+  if(!hasDeg) nodes.forEach((nd,i)=>nd.deg=adj[i].length);
+
+  // Find fake + cor source from settings block or guess highest-deg node
+  let fakeSource = -1, corSource = -1;
+  if(settings.fakeSourceId !== undefined) fakeSource = idMap[settings.fakeSourceId] ?? -1;
+  if(settings.corSourceId  !== undefined) corSource  = idMap[settings.corSourceId]  ?? -1;
+  // Fallback: pick two highest-degree nodes
+  if(fakeSource < 0 || corSource < 0){
+    const sorted = [...nodes].sort((a,b)=>b.deg-a.deg);
+    if(fakeSource < 0) fakeSource = sorted[0]?.id !== undefined ? idMap[sorted[0].id] : 0;
+    if(corSource  < 0) corSource  = sorted[1]?.id !== undefined ? idMap[sorted[1].id] : 1;
+  }
+  nodes[fakeSource].state = F;
+  let corActivated = false;
+  if(corrDelay === 0){ nodes[corSource].state=CO; corActivated=true; }
+
+  run.histF=[]; run.histCO=[]; run.histB=[]; run.histS=[];
+
+  function record(){
+    let s=0,f=0,c=0,b=0;
+    for(const nd of nodes){
+      if(nd.state===S) s++;
+      else if(nd.state===F) f++;
+      else if(nd.state===CO) c++;
+      else b++;
+    }
+    run.histS.push(s); run.histF.push(f); run.histCO.push(c); run.histB.push(b);
+  }
+  record();
+
+  for(let step=1; step<=MAX_STEPS; step++){
+    if(!corActivated && step >= corrDelay){
+      corActivated=true; nodes[corSource].state=CO;
+    }
+    const next = nodes.map(nd=>nd.state);
+    for(let i=0;i<nodes.length;i++){
+      const cur=nodes[i].state;
+      let gf=false, gc=false;
+      for(const j of adj[i]){
+        const ns=nodes[j].state;
+        const lf=Math.log(nodes[j].deg+1);
+        if(ns===F && Math.random()<Math.min(1,fp*lf)) gf=true;
+        if((ns===CO||ns===B) && Math.random()<Math.min(1,cp*lf)) gc=true;
+      }
+      if(cur===S){ if(gc) next[i]=CO; else if(gf) next[i]=F; }
+      else if(cur===F && gc) next[i]=B;
+    }
+    for(let i=0;i<nodes.length;i++) nodes[i].state=next[i];
+    record();
+
+    // Check end
+    let c=0,b=0;
+    for(const nd of nodes){ if(nd.state===CO) c++; else if(nd.state===B) b++; }
+    if((c+b)/n >= 0.9){ run.finalSteps=step; break; }
+    run.finalSteps=step;
+  }
+
+  run.simulated=true;
+}
+
+// ─────────────────────────────────────────
+// Draw individual run graph
+// ─────────────────────────────────────────
+const PAD={top:16,right:16,bottom:32,left:40};
+
+function drawRunGraphEmpty(run){
+  if(!run.ctx) return;
+  const {GW:gw,GH:gh,ctx:c}=run;
+  c.clearRect(0,0,gw,gh);
+  c.fillStyle='#181b1d'; c.fillRect(0,0,gw,gh);
+  c.fillStyle='rgba(150,150,150,0.3)';
+  c.font='11px monospace'; c.textAlign='center'; c.textBaseline='middle';
+  c.fillText('Run the simulation to see results', gw/2, gh/2);
+}
+
+function drawRunGraph(run){
+  if(!run.ctx || !run.canvas) return;
+  resizeRunCanvas(run);
+  const {GW:gw,GH:gh,ctx:c,histF,histCO,histB,histS}=run;
+  const total=run.data.nodes.length||1;
+  const maxLen=histF.length;
+  const cw2=gw-PAD.left-PAD.right;
+  const ch2=gh-PAD.top-PAD.bottom;
+
+  c.clearRect(0,0,gw,gh);
+  c.fillStyle='#181b1d'; c.fillRect(0,0,gw,gh);
+
+  // Grid
+  c.strokeStyle='rgba(255,255,255,0.05)'; c.lineWidth=0.7;
+  [0,0.25,0.5,0.75,1].forEach(yt=>{
+    const py=PAD.top+ch2*(1-yt);
+    c.beginPath(); c.moveTo(PAD.left,py); c.lineTo(PAD.left+cw2,py); c.stroke();
+    c.fillStyle='rgba(180,180,180,0.45)'; c.font='9px monospace';
+    c.textAlign='right'; c.textBaseline='middle';
+    c.fillText(Math.round(yt*total), PAD.left-4, py);
+  });
+
+  if(maxLen < 2){ drawRunGraphEmpty(run); return; }
+
+  function line(hist,col,dash){
+    if(!hist||hist.length<2) return;
+    c.beginPath(); c.strokeStyle=col; c.lineWidth=1.6;
+    if(dash) c.setLineDash([4,3]); else c.setLineDash([]);
+    hist.forEach((v,i)=>{
+      const px=PAD.left+(i/(maxLen-1))*cw2;
+      const py=PAD.top+ch2*(1-v/total);
+      i===0?c.moveTo(px,py):c.lineTo(px,py);
+    });
+    c.stroke(); c.setLineDash([]);
+  }
+
+  line(histS,'rgba(113,128,150,0.5)',true);
+  line(histF,'#e53e3e',false);
+  line(histCO,'#38a169',false);
+  line(histB,'#d69e2e',false);
+
+  // Endpoint dots + labels
+  function dot(hist,col){
+    if(!hist||!hist.length) return;
+    const i=hist.length-1;
+    const px=PAD.left+(i/Math.max(maxLen-1,1))*cw2;
+    const py=PAD.top+ch2*(1-hist[i]/total);
+    c.beginPath(); c.arc(px,py,3,0,Math.PI*2); c.fillStyle=col; c.fill();
+    c.fillStyle=col; c.font='9px monospace'; c.textAlign='left'; c.textBaseline='middle';
+    c.fillText(hist[i], px+5, py);
+  }
+  dot(histF,'#e53e3e'); dot(histCO,'#38a169'); dot(histB,'#d69e2e');
+
+  // Axes
+  c.strokeStyle='rgba(255,255,255,0.15)'; c.lineWidth=0.8; c.setLineDash([]);
+  c.beginPath(); c.moveTo(PAD.left,PAD.top); c.lineTo(PAD.left,PAD.top+ch2); c.lineTo(PAD.left+cw2,PAD.top+ch2); c.stroke();
+
+  // X ticks
+  c.fillStyle='rgba(180,180,180,0.45)'; c.font='8px monospace'; c.textAlign='center'; c.textBaseline='top';
+  const xt=Math.min(maxLen-1,6);
+  for(let t=0;t<=xt;t++){
+    const idx=Math.round(t/xt*(maxLen-1));
+    const px=PAD.left+(idx/(maxLen-1))*cw2;
+    c.fillText(idx,px,PAD.top+ch2+4);
+  }
+
+  c.fillStyle='rgba(180,180,180,0.3)'; c.font='8px monospace'; c.textAlign='center'; c.textBaseline='bottom';
+  c.fillText('Step',PAD.left+cw2/2,gh-1);
+}
+
+// ─────────────────────────────────────────
+// Combined overlay chart
+// ─────────────────────────────────────────
+function resizeCombined(){
+  const wrap=document.getElementById('combined-wrap');
+  const cv=document.getElementById('combined-canvas');
+  const gw=wrap.getBoundingClientRect().width||900;
+  const gh=260;
+  cv.width=Math.round(gw*devicePixelRatio);
+  cv.height=Math.round(gh*devicePixelRatio);
+  cv.style.height=gh+'px';
+  const c=cv.getContext('2d');
+  c.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  return {cv,c,gw,gh};
+}
+
+function drawCombined(){
+  const {cv,c,gw,gh}=resizeCombined();
+  const CPAD={top:20,right:20,bottom:36,left:44};
+  const cw2=gw-CPAD.left-CPAD.right;
+  const ch2=gh-CPAD.top-CPAD.bottom;
+
+  c.clearRect(0,0,gw,gh);
+  c.fillStyle='#181b1d'; c.fillRect(0,0,gw,gh);
+
+  const simRuns=runs.filter(r=>r.simulated);
+  if(!simRuns.length){
+    c.fillStyle='rgba(150,150,150,0.3)'; c.font='12px monospace';
+    c.textAlign='center'; c.textBaseline='middle';
+    c.fillText('Simulate runs to see overlay', CPAD.left+cw2/2, CPAD.top+ch2/2);
+    drawCombinedAxes(c,CPAD,cw2,ch2);
+    return;
+  }
+
+  const maxTotal=Math.max(...simRuns.map(r=>r.data.nodes.length));
+  const maxLen=Math.max(...simRuns.map(r=>r.histF.length));
+
+  // Grid
+  c.strokeStyle='rgba(255,255,255,0.05)'; c.lineWidth=0.7;
+  [0,0.25,0.5,0.75,1].forEach(yt=>{
+    const py=CPAD.top+ch2*(1-yt);
+    c.beginPath(); c.moveTo(CPAD.left,py); c.lineTo(CPAD.left+cw2,py); c.stroke();
+    c.fillStyle='rgba(180,180,180,0.45)'; c.font='9px monospace';
+    c.textAlign='right'; c.textBaseline='middle';
+    c.fillText((yt*100).toFixed(0)+'%', CPAD.left-4, py);
+  });
+
+  // Draw each run's F, CO, B lines with its run color + low opacity
+  simRuns.forEach(run=>{
+    const col=RUN_COLORS[run.slot];
+    const total=run.data.nodes.length||1;
+    const len=run.histF.length;
+    if(len<2) return;
+    function cline(hist,alpha,dash){
+      if(!hist||hist.length<2) return;
+      c.beginPath(); c.lineWidth=1.3;
+      c.strokeStyle=col.replace(')',`,${alpha})`).replace('#','rgba(').replace(/rgba\(([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2}),/i,(m,r,g,b)=>`rgba(${parseInt(r,16)},${parseInt(g,16)},${parseInt(b,16)},`);
+      if(dash) c.setLineDash([4,3]); else c.setLineDash([]);
+      hist.forEach((v,i)=>{
+        const px=CPAD.left+(i/(maxLen-1))*cw2;
+        const py=CPAD.top+ch2*(1-v/total);
+        i===0?c.moveTo(px,py):c.lineTo(px,py);
+      });
+      c.stroke(); c.setLineDash([]);
+    }
+    // Use solid run color at 60% opacity
+    const rgb=hexToRgb(col);
+    const stroke=`rgba(${rgb.r},${rgb.g},${rgb.b},0.55)`;
+    const strokeD=`rgba(${rgb.r},${rgb.g},${rgb.b},0.25)`;
+    c.strokeStyle=stroke; c.lineWidth=1.3;
+    c.setLineDash([]); c.beginPath();
+    run.histF.forEach((v,i)=>{
+      const px=CPAD.left+(i/(len-1))*cw2;
+      const py=CPAD.top+ch2*(1-v/total);
+      i===0?c.moveTo(px,py):c.lineTo(px,py);
+    });
+    c.stroke();
+  });
+
+  // Axes
+  drawCombinedAxes(c,CPAD,cw2,ch2);
+  c.fillStyle='rgba(180,180,180,0.45)'; c.font='8px monospace'; c.textAlign='center'; c.textBaseline='top';
+  const xt=Math.min(maxLen-1,8);
+  for(let t=0;t<=xt;t++){
+    const idx=Math.round(t/xt*(maxLen-1));
+    const px=CPAD.left+(idx/Math.max(maxLen-1,1))*cw2;
+    c.fillText(idx,px,CPAD.top+ch2+4);
+  }
+  c.fillStyle='rgba(180,180,180,0.3)'; c.font='8px monospace'; c.textAlign='center'; c.textBaseline='bottom';
+  c.fillText('Step',CPAD.left+cw2/2,gh-1);
+
+  // Run legend inside chart
+  c.font='9px monospace'; c.textBaseline='top';
+  let lx=CPAD.left, ly=4;
+  simRuns.forEach(run=>{
+    const rgb=hexToRgb(RUN_COLORS[run.slot]);
+    c.fillStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},0.85)`;
+    c.fillRect(lx,ly,14,3);
+    c.fillText(`R${run.slot+1}`, lx+18, ly-1);
+    lx+=c.measureText(`R${run.slot+1}`).width+30;
+    if(lx > gw-80){ lx=CPAD.left; ly+=14; }
+  });
+}
+
+function drawCombinedAxes(c,CPAD,cw2,ch2){
+  c.strokeStyle='rgba(255,255,255,0.15)'; c.lineWidth=0.8; c.setLineDash([]);
+  c.beginPath();
+  c.moveTo(CPAD.left,CPAD.top); c.lineTo(CPAD.left,CPAD.top+ch2);
+  c.lineTo(CPAD.left+cw2,CPAD.top+ch2); c.stroke();
+}
+
+function hexToRgb(hex){
+  const r=parseInt(hex.slice(1,3),16);
+  const g=parseInt(hex.slice(3,5),16);
+  const b=parseInt(hex.slice(5,7),16);
+  return {r,g,b};
+}
+
+// ─────────────────────────────────────────
+// Summary stats
+// ─────────────────────────────────────────
+function updateSummary(){
+  const sr=runs.filter(r=>r.simulated);
+  if(!sr.length){
+    document.getElementById('sum-f').textContent='—';
+    document.getElementById('sum-c').textContent='—';
+    document.getElementById('sum-b').textContent='—';
+    document.getElementById('sum-steps').textContent='—';
+    return;
+  }
+  const avgF = sr.reduce((s,r)=>s+(r.histF[r.histF.length-1]||0),0)/sr.length;
+  const avgC = sr.reduce((s,r)=>s+(r.histCO[r.histCO.length-1]||0),0)/sr.length;
+  const avgB = sr.reduce((s,r)=>s+(r.histB[r.histB.length-1]||0),0)/sr.length;
+  const avgSt= sr.reduce((s,r)=>s+r.finalSteps,0)/sr.length;
+  document.getElementById('sum-f').textContent=avgF.toFixed(1);
+  document.getElementById('sum-c').textContent=avgC.toFixed(1);
+  document.getElementById('sum-b').textContent=avgB.toFixed(1);
+  document.getElementById('sum-steps').textContent=avgSt.toFixed(1);
+}
+
+// ─────────────────────────────────────────
+// Export all as PNG (one composite image)
+// ─────────────────────────────────────────
+document.getElementById('btn-export-all').addEventListener('click', ()=>{
+  const simRuns=runs.filter(r=>r.simulated);
+  if(!simRuns.length){ showToast('⚠ No simulated runs'); return; }
+
+  const SCALE=2;
+  const W=900, ROWH=200, COMBINED_H=280;
+  const COLS=2, ROWS=Math.ceil(simRuns.length/COLS);
+  const CARD_W=W/COLS;
+  const TOTAL_H=COMBINED_H+ROWS*ROWH+60;
+
+  const off=document.createElement('canvas');
+  off.width=W*SCALE; off.height=TOTAL_H*SCALE;
+  const oc=off.getContext('2d');
+  oc.setTransform(SCALE,0,0,SCALE,0,0);
+  oc.fillStyle='#15181a'; oc.fillRect(0,0,W,TOTAL_H);
+
+  // Title
+  oc.fillStyle='rgba(232,236,238,0.9)'; oc.font='bold 13px monospace';
+  oc.textAlign='left'; oc.textBaseline='top';
+  oc.fillText('Disinformation Spread — Parallel Execution Results',14,12);
+  oc.fillStyle='rgba(122,138,146,0.7)'; oc.font='10px monospace';
+  oc.fillText(`${simRuns.length} run(s) · Exported ${new Date().toLocaleString()}`,14,29);
+
+  // Combined section header
+  oc.fillStyle='rgba(122,138,146,0.5)'; oc.font='9px monospace';
+  oc.fillText('ALL RUNS — DISINFORMATION SPREAD OVERLAY',14,48);
+
+  // Combined chart
+  const CPAD={top:20,right:20,bottom:34,left:48};
+  const CBGX=0, CBGY=55, CBW=W, CBH=COMBINED_H;
+  oc.fillStyle='#181b1d'; oc.fillRect(CBGX,CBGY,CBW,CBH);
+  const cw2=CBW-CPAD.left-CPAD.right;
+  const ch2=CBH-CPAD.top-CPAD.bottom;
+
+  const maxLen=Math.max(...simRuns.map(r=>r.histF.length));
+  [0,0.25,0.5,0.75,1].forEach(yt=>{
+    const py=CBGY+CPAD.top+ch2*(1-yt);
+    oc.strokeStyle='rgba(255,255,255,0.05)'; oc.lineWidth=0.7;
+    oc.setLineDash([]); oc.beginPath();
+    oc.moveTo(CBGX+CPAD.left,py); oc.lineTo(CBGX+CPAD.left+cw2,py); oc.stroke();
+    oc.fillStyle='rgba(180,180,180,0.45)'; oc.font='9px monospace';
+    oc.textAlign='right'; oc.textBaseline='middle';
+    oc.fillText((yt*100).toFixed(0)+'%',CBGX+CPAD.left-4,py);
+  });
+
+  simRuns.forEach(run=>{
+    if(run.histF.length<2) return;
+    const total=run.data.nodes.length||1;
+    const len=run.histF.length;
+    const {r,g,b}=hexToRgb(RUN_COLORS[run.slot]);
+    oc.strokeStyle=`rgba(${r},${g},${b},0.7)`;
+    oc.lineWidth=1.5; oc.setLineDash([]);
+    oc.beginPath();
+    run.histF.forEach((v,i)=>{
+      const px=CBGX+CPAD.left+(i/(maxLen-1))*cw2;
+      const py=CBGY+CPAD.top+ch2*(1-v/total);
+      i===0?oc.moveTo(px,py):oc.lineTo(px,py);
+    });
+    oc.stroke();
+  });
+
+  oc.strokeStyle='rgba(255,255,255,0.15)'; oc.lineWidth=0.8; oc.setLineDash([]);
+  oc.beginPath();
+  oc.moveTo(CBGX+CPAD.left,CBGY+CPAD.top);
+  oc.lineTo(CBGX+CPAD.left,CBGY+CPAD.top+ch2);
+  oc.lineTo(CBGX+CPAD.left+cw2,CBGY+CPAD.top+ch2);
+  oc.stroke();
+
+  // X ticks combined
+  oc.fillStyle='rgba(180,180,180,0.45)'; oc.font='8px monospace'; oc.textAlign='center'; oc.textBaseline='top';
+  const xt2=Math.min(maxLen-1,8);
+  for(let t=0;t<=xt2;t++){
+    const idx=Math.round(t/xt2*(maxLen-1));
+    const px=CBGX+CPAD.left+(idx/Math.max(maxLen-1,1))*cw2;
+    oc.fillText(idx,px,CBGY+CPAD.top+ch2+4);
+  }
+
+  // Legend for combined
+  oc.font='9px monospace'; oc.textBaseline='top';
+  let lx=CBGX+CPAD.left, ly=CBGY+4;
+  simRuns.forEach(run=>{
+    const {r,g,b}=hexToRgb(RUN_COLORS[run.slot]);
+    oc.fillStyle=`rgba(${r},${g},${b},0.85)`;
+    oc.fillRect(lx,ly,14,3);
+    oc.fillText(`R${run.slot+1}`,lx+18,ly-1);
+    lx+=oc.measureText(`R${run.slot+1}`).width+32;
+  });
+
+  // Individual run cards in 2-column grid
+  const GRID_Y=CBGY+CBH+10;
+  const ROW_PAD={top:30,right:14,bottom:30,left:44};
+  const RGH=ROWH;
+
+  simRuns.forEach((run,ri)=>{
+    const col=ri%COLS, row=Math.floor(ri/COLS);
+    const ox=col*CARD_W, oy=GRID_Y+row*RGH;
+    const rw=CARD_W, rh=RGH;
+    const rw2=rw-ROW_PAD.left-ROW_PAD.right;
+    const rh2=rh-ROW_PAD.top-ROW_PAD.bottom;
+    const total=run.data.nodes.length||1;
+    const len=run.histF.length;
+
+    oc.fillStyle='#1c2022'; oc.fillRect(ox,oy,rw,rh);
+    oc.strokeStyle='rgba(255,255,255,0.05)'; oc.lineWidth=0.5;
+    oc.strokeRect(ox,oy,rw,rh);
+
+    // Header
+    const {r,g,b}=hexToRgb(RUN_COLORS[run.slot]);
+    oc.fillStyle=`rgba(${r},${g},${b},0.9)`;
+    oc.font='bold 10px monospace'; oc.textAlign='left'; oc.textBaseline='top';
+    oc.fillText(`Run ${run.slot+1}${run.file?' — '+run.file:''}`,ox+ROW_PAD.left,oy+8);
+    oc.fillStyle='rgba(180,180,180,0.5)'; oc.font='9px monospace';
+    oc.fillText(`F:${run.histF[len-1]||0}  C:${run.histCO[len-1]||0}  B:${run.histB[len-1]||0}  Steps:${run.finalSteps}`,ox+rw-ROW_PAD.right-200,oy+8);
+
+    // Grid
+    oc.strokeStyle='rgba(255,255,255,0.04)'; oc.lineWidth=0.6;
+    [0,0.5,1].forEach(yt=>{
+      const py=oy+ROW_PAD.top+rh2*(1-yt);
+      oc.beginPath(); oc.moveTo(ox+ROW_PAD.left,py); oc.lineTo(ox+ROW_PAD.left+rw2,py); oc.stroke();
+      oc.fillStyle='rgba(180,180,180,0.35)'; oc.font='8px monospace';
+      oc.textAlign='right'; oc.textBaseline='middle';
+      oc.fillText(Math.round(yt*total),ox+ROW_PAD.left-3,py);
+    });
+
+    // Lines
+    if(len>=2){
+      function rline(hist,col2,dsh){
+        oc.beginPath(); oc.strokeStyle=col2; oc.lineWidth=1.4;
+        if(dsh) oc.setLineDash([3,3]); else oc.setLineDash([]);
+        hist.forEach((v,i)=>{
+          const px=ox+ROW_PAD.left+(i/(len-1))*rw2;
+          const py=oy+ROW_PAD.top+rh2*(1-v/total);
+          i===0?oc.moveTo(px,py):oc.lineTo(px,py);
+        });
+        oc.stroke(); oc.setLineDash([]);
+      }
+      rline(run.histS,'rgba(113,128,150,0.4)',true);
+      rline(run.histF,'#e53e3e',false);
+      rline(run.histCO,'#38a169',false);
+      rline(run.histB,'#d69e2e',false);
+    }
+
+    // Axes
+    oc.strokeStyle='rgba(255,255,255,0.12)'; oc.lineWidth=0.7; oc.setLineDash([]);
+    oc.beginPath();
+    oc.moveTo(ox+ROW_PAD.left,oy+ROW_PAD.top);
+    oc.lineTo(ox+ROW_PAD.left,oy+ROW_PAD.top+rh2);
+    oc.lineTo(ox+ROW_PAD.left+rw2,oy+ROW_PAD.top+rh2);
+    oc.stroke();
+  });
+
+  // Watermark
+  oc.fillStyle='rgba(255,255,255,0.2)'; oc.font='8px monospace';
+  oc.textAlign='right'; oc.textBaseline='bottom';
+  oc.fillText(`Disinformation Spread · ${new Date().toLocaleString()}`,W-10,TOTAL_H-2);
+
+  const link=document.createElement('a');
+  link.download=`parallel_runs_${simRuns.length}.png`;
+  link.href=off.toDataURL('image/png');
+  link.click();
+  showToast(`✓ Exported ${simRuns.length} run(s) as PNG`);
+});
+
+// ─────────────────────────────────────────
+// Status
+// ─────────────────────────────────────────
+function setStatus(msg){
+  document.getElementById('status-msg').textContent=msg;
+}
+
+// ─────────────────────────────────────────
+// Resize handler
+// ─────────────────────────────────────────
+window.addEventListener('resize', ()=>{
+  runs.forEach(run=>{
+    if(run.canvas){
+      resizeRunCanvas(run);
+      if(run.simulated) drawRunGraph(run);
+      else drawRunGraphEmpty(run);
+    }
+  });
+  drawCombined();
+});
+
+// ─────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────
+buildUI();
+drawCombined();
+</script>
+</body>
+</html>
