@@ -1,10 +1,12 @@
-
 <!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <style>
+body{
+border-top: 10px solid #3182ce;
+}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:var(--color-background-tertiary);
@@ -27,7 +29,7 @@ body{background:transparent;color:var(--text);font-family:var(--font-sans,-apple
 .sv-s{color:var(--color-text-secondary);}.sv-f{color:var(--fake);}.sv-c{color:var(--correct);}.sv-b{color:var(--both);}.sv-t{color:var(--muted);}
 
 #cw{position:relative;border:0.5px solid var(--border);border-radius:var(--r);overflow:hidden;background:var(--surface);margin-bottom:10px;}
-canvas{display:block;width:100%;background-color: #202426;}
+canvas{display:block;width:100%;background-color:#202426;}
 
 #loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface);z-index:20;gap:12px;}
 #loading p{font-size:13px;color:var(--muted);}
@@ -51,6 +53,10 @@ button:hover{background:var(--surface2);}
 button:disabled{opacity:.35;cursor:not-allowed;}
 #btn-run{border-color:var(--fake);color:var(--fake);}
 #btn-step{border-color:#4299e1;color:#4299e1;}
+#btn-import-json{border-color:#805ad5;color:#805ad5;}
+#btn-export-layout{border-color:#805ad5;color:#805ad5;}
+#btn-export-graph{border-color:#38a169;color:#38a169;}
+#file-input{display:none;}
 
 .legend{display:flex;flex-wrap:wrap;gap:7px 16px;font-size:11px;color:var(--muted);align-items:center;}
 .leg{display:flex;align-items:center;gap:5px;}
@@ -62,9 +68,59 @@ button:disabled{opacity:.35;cursor:not-allowed;}
 .bf{background:var(--fake);color:#fff;}
 .bc{background:var(--correct);color:#fff;}
 .pv{font-weight:500;color:var(--text);}
+
+/* Graph section */
+.graph-section{margin-top:14px;}
+.graph-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;}
+.graph-title{font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+.graph-legend{display:flex;gap:14px;font-size:11px;}
+.graph-leg{display:flex;align-items:center;gap:5px;}
+.graph-leg-dot{width:10px;height:3px;border-radius:2px;}
+#graph-wrap{position:relative;background:var(--surface);border:0.5px solid var(--border);border-radius:var(--r);overflow:hidden;}
+#graph-canvas{display:block;width:100%;background-color:#181b1d;}
+
+.import-status{font-size:11px;color:#805ad5;margin-left:6px;font-style:italic;}
+
+/* Settings-applied toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(30,30,30,0.92);border:0.5px solid rgba(128,90,213,0.6);border-radius:8px;padding:8px 18px;font-size:12px;color:#c4b5fd;pointer-events:none;opacity:0;transition:opacity .3s;z-index:999;white-space:nowrap;}
+.toast.show{opacity:1;}
+
+.navigation{
+  list-style: none;
+}
+
+nav ul{
+  display: flex;
+  flex-direction: row;
+  padding: 10px;
+}
+
+nav a{
+  margin: 20px;
+}
+
+nav a:link{
+  color: #3182ce;
+  text-decoration: none;
+}
+
+nav a:visited{
+  color:#3182ce;
+}
+
 </style>
 </head>
 <body>
+<header>
+<h1>Disinformation Spread Visualization</h1>
+<nav>
+<ul>
+<li class="navigation"><a href="#"><b>Main</b></a></li>
+<li class="navigation"><a href="parallel.html">Parallel Execution</a></li>
+</ul>
+</nav>
+</header>
+
 <div class="page">
   <div class="stats">
     <div class="stat"><div class="stat-label">No Data</div><div class="stat-val sv-s" id="s-sus">—</div></div>
@@ -89,7 +145,7 @@ button:disabled{opacity:.35;cursor:not-allowed;}
       <div class="cr"><label>Number of connections(m₀)</label><input type="range" id="sl-m" min="1" max="5" value="2" step="1"><span id="lbl-m">2</span></div>
     </div>
     <div class="cs">
-      <div class="ct">Probability of spreading <span style="font-size:9px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(p × ln(number of connections + 1))</span></div>
+      <div class="ct">Probability of spreading <span style="font-size:9px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(p × ln(connections + 1))</span></div>
       <div class="cr"><label>Disinformation</label><input type="range" id="sl-fp" min="0.05" max="1" value="0.40" step="0.05"><span id="lbl-fp">0.40</span></div>
       <div class="cr"><label>Fact-checks</label><input type="range" id="sl-cp" min="0.05" max="1" value="0.25" step="0.05"><span id="lbl-cp">0.25</span></div>
     </div>
@@ -113,6 +169,10 @@ button:disabled{opacity:.35;cursor:not-allowed;}
     <button id="btn-step" disabled>Increment Step</button>
     <button id="btn-reset" disabled>⟳ Reset Run</button>
     <button id="btn-rebuild">↺ Regenerate Network</button>
+    <button id="btn-import-json">⬆ Import Layout JSON</button>
+    <button id="btn-export-layout">⬇ Export Layout JSON</button>
+    <span class="import-status" id="import-status"></span>
+    <input type="file" id="file-input" accept=".json,application/json">
   </div>
 
   <div class="legend">
@@ -124,7 +184,29 @@ button:disabled{opacity:.35;cursor:not-allowed;}
     <span class="leg"><span class="ldot" style="background:#3182ce"></span>Source Node</span>
     <span class="leg"><span class="ldot" style="background:#319795"></span>Waiting for Fact-check</span>
   </div>
+
+  <!-- Chart section -->
+  <div class="graph-section">
+    <div class="graph-header">
+      <span class="graph-title">Spread over Time</span>
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+        <div class="graph-legend">
+          <div class="graph-leg"><div class="graph-leg-dot" style="background:#e53e3e"></div><span style="color:#e53e3e">Disinformation</span></div>
+          <div class="graph-leg"><div class="graph-leg-dot" style="background:#38a169"></div><span style="color:#38a169">Fact-checked</span></div>
+          <div class="graph-leg"><div class="graph-leg-dot" style="background:#d69e2e"></div><span style="color:#d69e2e">Cured</span></div>
+          <div class="graph-leg"><div class="graph-leg-dot" style="background:#718096;height:1px;border-top:2px dashed #718096;"></div><span style="color:#718096">No Data</span></div>
+        </div>
+        <button id="btn-export-graph">⬇ Export Graph PNG</button>
+      </div>
+    </div>
+    <div id="graph-wrap">
+      <canvas id="graph-canvas"></canvas>
+    </div>
+  </div>
 </div>
+
+<!-- Toast notification -->
+<div class="toast" id="toast"></div>
 
 <script>
 const canvas  = document.getElementById('c');
@@ -135,17 +217,89 @@ const loadMsg = document.getElementById('load-msg');
 const hintEl  = document.getElementById('hint');
 const modeEl  = document.getElementById('mode-bar');
 
-/* 상태 정의:
-   S=0 미감염
-   F=1 거짓 정보만 접함 (거짓 전파 가능)
-   CO=2 정정 보도 접함 (면역 — 거짓 전파 불가)
-   B=3 거짓이었다가 정정됨 (교정 완료 — 거짓 전파 불가)
-*/
+const graphCanvas = document.getElementById('graph-canvas');
+const gctx        = graphCanvas.getContext('2d');
+const graphWrap   = document.getElementById('graph-wrap');
+
 const S=0, F=1, CO=2, B=3;
-let W, H, nodes=[], edges=[], adj=[];
+let W, H, GW, GH;
+let nodes=[], edges=[], adj=[];
 let step=0, pickPhase=0, fakeSource=-1, corSource=-1;
 let autoTimer=null, corActivated=false;
 
+// History arrays for the chart
+let histF=[], histCO=[], histB=[], histS=[];
+
+/* ── toast ── */
+function showToast(msg, duration=2800){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>t.classList.remove('show'), duration);
+}
+
+/* ── slider helpers ── */
+const SLIDER_DEFS = [
+  { id:'sl-n',   lbl:'lbl-n',   fmt: v => v },
+  { id:'sl-m',   lbl:'lbl-m',   fmt: v => v },
+  { id:'sl-fp',  lbl:'lbl-fp',  fmt: v => parseFloat(v).toFixed(2) },
+  { id:'sl-cp',  lbl:'lbl-cp',  fmt: v => parseFloat(v).toFixed(2) },
+  { id:'sl-cd',  lbl:'lbl-cd',  fmt: v => v },
+  { id:'sl-spd', lbl:'lbl-spd', fmt: v => v + 'ms' },
+];
+
+function applySlider(id, value){
+  const def = SLIDER_DEFS.find(d => d.id === id);
+  if(!def) return;
+  const el = document.getElementById(id);
+  if(!el) return;
+  // Clamp to slider bounds
+  const clamped = Math.min(Math.max(parseFloat(value), parseFloat(el.min)), parseFloat(el.max));
+  el.value = clamped;
+  document.getElementById(def.lbl).textContent = def.fmt(clamped);
+}
+
+/**
+ * Read all current slider values into a plain settings object.
+ * Keys match the "settings" block in the JSON schema.
+ */
+function readSettings(){
+  return {
+    nodes:        parseInt(document.getElementById('sl-n').value),
+    connections:  parseInt(document.getElementById('sl-m').value),
+    fakeProb:     parseFloat(document.getElementById('sl-fp').value),
+    correctProb:  parseFloat(document.getElementById('sl-cp').value),
+    corrDelay:    parseInt(document.getElementById('sl-cd').value),
+    autoSpeed:    parseInt(document.getElementById('sl-spd').value),
+  };
+}
+
+/**
+ * Apply a settings object (partial or full) to all sliders.
+ * Unknown keys are silently ignored.
+ */
+function applySettings(s){
+  if(!s || typeof s !== 'object') return;
+  const map = {
+    nodes:       'sl-n',
+    connections: 'sl-m',
+    fakeProb:    'sl-fp',
+    correctProb: 'sl-cp',
+    corrDelay:   'sl-cd',
+    autoSpeed:   'sl-spd',
+  };
+  const applied = [];
+  for(const [key, sliderId] of Object.entries(map)){
+    if(s[key] !== undefined){
+      applySlider(sliderId, s[key]);
+      applied.push(key);
+    }
+  }
+  return applied;
+}
+
+/* ── resize ── */
 function resize() {
   const rect = cw.getBoundingClientRect();
   W = rect.width;
@@ -156,6 +310,17 @@ function resize() {
   ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
 }
 
+function resizeGraph() {
+  const rect = graphWrap.getBoundingClientRect();
+  GW = rect.width;
+  GH = 220;
+  graphCanvas.width  = Math.round(GW * devicePixelRatio);
+  graphCanvas.height = Math.round(GH * devicePixelRatio);
+  graphCanvas.style.height = GH + 'px';
+  gctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+}
+
+/* ── topology ── */
 function buildTopology(n, m) {
   nodes=[]; edges=[]; adj=[];
   for(let i=0;i<n;i++){
@@ -183,11 +348,11 @@ function addEdge(i,j){
   adj[i].push(j);adj[j].push(i);
 }
 
+/* ── layout ── */
 function computeLayout() {
   const n = nodes.length;
   const CX = W / 2, CY = H / 2;
   const pad = 35;
-
   const maxDeg = Math.max(...nodes.map(nd => nd.deg), 1);
   const sorted = [...nodes].sort((a, b) => b.deg - a.deg);
   sorted.forEach((nd, idx) => {
@@ -199,7 +364,6 @@ function computeLayout() {
     nd.y = CY + r * Math.sin(angle);
     nd.vx = 0; nd.vy = 0;
   });
-
   const TICKS = 900;
   for (let tick = 0; tick < TICKS; tick++) {
     const alpha = Math.max(0.008, 1 - tick / TICKS);
@@ -207,12 +371,10 @@ function computeLayout() {
     const att   = 0.08 * alpha;
     const grav  = 0.055 * alpha;
     const idealLen = 45;
-
     for (const nd of nodes) {
       nd.vx += (CX - nd.x) * grav;
       nd.vy += (CY - nd.y) * grav;
     }
-
     for (let i = 0; i < n; i++) {
       const a = nodes[i];
       for (let j = i + 1; j < n; j++) {
@@ -224,7 +386,6 @@ function computeLayout() {
         b.vx -= dx * f; b.vy -= dy * f;
       }
     }
-
     for (const [i, j] of edges) {
       const a = nodes[i], b = nodes[j];
       const dx = b.x - a.x, dy = b.y - a.y;
@@ -234,7 +395,6 @@ function computeLayout() {
       a.vx += fx; a.vy += fy;
       b.vx -= fx; b.vy -= fy;
     }
-
     const margin = 45;
     for (const nd of nodes) {
       if (nd.x < margin)       nd.vx += (margin - nd.x) * 0.18;
@@ -242,19 +402,14 @@ function computeLayout() {
       if (nd.y < margin)       nd.vy += (margin - nd.y) * 0.18;
       if (nd.y > H - margin)   nd.vy -= (nd.y - (H - margin)) * 0.18;
     }
-
     for (const nd of nodes) {
-      nd.vx *= 0.65;
-      nd.vy *= 0.65;
-      nd.x += nd.vx;
-      nd.y += nd.vy;
+      nd.vx *= 0.65; nd.vy *= 0.65;
+      nd.x += nd.vx; nd.y += nd.vy;
       nd.x = Math.max(pad, Math.min(W - pad, nd.x));
       nd.y = Math.max(pad, Math.min(H - pad, nd.y));
     }
   }
-
   for (const nd of nodes) { nd.vx = 0; nd.vy = 0; }
-
   const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
   const minX = Math.min(...xs), maxX = Math.max(...xs);
   const minY = Math.min(...ys), maxY = Math.max(...ys);
@@ -266,6 +421,7 @@ function computeLayout() {
   }
 }
 
+/* ── draw network ── */
 function nodeRadius(nd){ return Math.min(4 + nd.deg * 1.1, 22); }
 function nodeColor(nd){
   if(nd.id===fakeSource) return '#3182ce';
@@ -284,7 +440,6 @@ function edgeAlpha(i,j){
   if((a===CO||a===B)&&(b===CO||b===B)) return 'rgba(56,161,105,0.45)';
   return 'rgba(128,128,128,0.08)';
 }
-
 function draw(){
   ctx.clearRect(0,0,W,H);
   for(const [i,j] of edges){
@@ -326,58 +481,125 @@ function draw(){
   updateStats();
 }
 
-function simStep(){
-  if(fakeSource<0||corSource<0) return;
+/* ── draw chart ── */
+function drawGraph(){
+  const PAD = { top: 18, right: 20, bottom: 36, left: 44 };
+  const cw2 = GW - PAD.left - PAD.right;
+  const ch2 = GH - PAD.top - PAD.bottom;
+  gctx.clearRect(0, 0, GW, GH);
 
-  const corrDelay = parseInt(document.getElementById('sl-cd').value);
-  if(!corActivated && step >= corrDelay) {
-    corActivated = true;
-    nodes[corSource].state = CO;
+  // Background
+  gctx.fillStyle = '#181b1d';
+  gctx.fillRect(0, 0, GW, GH);
+
+  const maxLen = histF.length;
+  const total  = nodes.length || 1;
+
+  // Grid lines
+  gctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  gctx.lineWidth = 0.8;
+  const yTicks = [0, 0.25, 0.5, 0.75, 1.0];
+  for(const yt of yTicks){
+    const py = PAD.top + ch2 * (1 - yt);
+    gctx.beginPath();
+    gctx.moveTo(PAD.left, py);
+    gctx.lineTo(PAD.left + cw2, py);
+    gctx.stroke();
+    // Y label
+    gctx.fillStyle = 'rgba(180,180,180,0.55)';
+    gctx.font = '9px sans-serif';
+    gctx.textAlign = 'right';
+    gctx.textBaseline = 'middle';
+    gctx.fillText(Math.round(yt * total), PAD.left - 5, py);
   }
 
-  const next = nodes.map(nd => nd.state);
-  const fp = parseFloat(document.getElementById('sl-fp').value);
-  const cp = parseFloat(document.getElementById('sl-cp').value);
+  if(maxLen < 2){
+    gctx.fillStyle = 'rgba(150,150,150,0.35)';
+    gctx.font = '12px sans-serif';
+    gctx.textAlign = 'center';
+    gctx.textBaseline = 'middle';
+    gctx.fillText('Run the simulation to see results', PAD.left + cw2/2, PAD.top + ch2/2);
+    drawGraphAxes(PAD, cw2, ch2);
+    return;
+  }
 
-  for(let i=0; i<nodes.length; i++){
-    const cur = nodes[i].state;
-    let gf=false, gc=false;
-
-    for(const j of adj[i]){
-      const ns = nodes[j].state;
-      const logFactor = Math.log(nodes[j].deg + 1);
-      const actualFp = Math.min(1, fp * logFactor);
-      const actualCp = Math.min(1, cp * logFactor);
-
-      /* 거짓 정보는 F 상태인 이웃에서만 전파 (CO, B는 거짓 전파 안 함) */
-      if(ns===F && Math.random()<actualFp) gf=true;
-      /* 정정 보도는 CO 또는 B 상태인 이웃에서 전파 */
-      if((ns===CO||ns===B) && Math.random()<actualCp) gc=true;
+  // Draw lines
+  function drawLine(hist, color, dashed){
+    if(!hist || hist.length < 2) return;
+    gctx.beginPath();
+    gctx.strokeStyle = color;
+    gctx.lineWidth = 1.8;
+    if(dashed) gctx.setLineDash([4,3]);
+    else gctx.setLineDash([]);
+    for(let i=0; i<hist.length; i++){
+      const px = PAD.left + (i / (maxLen - 1)) * cw2;
+      const py = PAD.top + ch2 * (1 - hist[i] / total);
+      if(i===0) gctx.moveTo(px, py);
+      else gctx.lineTo(px, py);
     }
-
-    if(cur===S){
-      if(gc) next[i]=CO;        /* 정정을 먼저/동시에 접하면 면역 (거짓 차단) */
-      else if(gf) next[i]=F;
-    } else if(cur===F && gc) {
-      next[i]=B;               /* 거짓 접한 사람이 정정 들으면 교정됨(노란색) */
-    }
-    /* CO, B 상태는 변하지 않음 — 한번 정정 접하면 거짓 전파 불가 */
+    gctx.stroke();
+    gctx.setLineDash([]);
   }
 
-  for(let i=0;i<nodes.length;i++) nodes[i].state=next[i];
-  step++;
-  document.getElementById('s-step').textContent = step;
+  drawLine(histS, 'rgba(113,128,150,0.7)', true);
+  drawLine(histF,  '#e53e3e', false);
+  drawLine(histCO, '#38a169', false);
+  drawLine(histB,  '#d69e2e', false);
 
-  if(!corActivated) {
-    const remaining = corrDelay - step;
-    modeEl.textContent = `▶ Running… Time until fact-check starts: t=${corrDelay}, steps until fact-check starts: (${remaining} steps)`;
-  } else {
-    modeEl.textContent = `▶ Running… (Fact-check Activated)`;
+  // Dots at latest values
+  function drawDot(hist, color){
+    if(!hist || hist.length < 1) return;
+    const i = hist.length - 1;
+    const px = PAD.left + (i / Math.max(maxLen-1,1)) * cw2;
+    const py = PAD.top + ch2 * (1 - hist[i] / total);
+    gctx.beginPath();
+    gctx.arc(px, py, 3.5, 0, Math.PI*2);
+    gctx.fillStyle = color;
+    gctx.fill();
+    // value label
+    gctx.fillStyle = color;
+    gctx.font = '9px sans-serif';
+    gctx.textAlign = 'left';
+    gctx.textBaseline = 'middle';
+    gctx.fillText(hist[i], px + 5, py);
   }
+  drawDot(histF,  '#e53e3e');
+  drawDot(histCO, '#38a169');
+  drawDot(histB,  '#d69e2e');
 
-  draw();
+  drawGraphAxes(PAD, cw2, ch2);
+
+  // X-axis step labels
+  gctx.fillStyle = 'rgba(180,180,180,0.55)';
+  gctx.font = '9px sans-serif';
+  gctx.textAlign = 'center';
+  gctx.textBaseline = 'top';
+  const xTicks = Math.min(maxLen - 1, 8);
+  for(let t=0; t<=xTicks; t++){
+    const idx = Math.round(t / xTicks * (maxLen - 1));
+    const px = PAD.left + (idx / (maxLen - 1)) * cw2;
+    gctx.fillText(idx, px, PAD.top + ch2 + 5);
+  }
+  // X axis label
+  gctx.fillStyle = 'rgba(180,180,180,0.4)';
+  gctx.font = '9px sans-serif';
+  gctx.textAlign = 'center';
+  gctx.textBaseline = 'bottom';
+  gctx.fillText('Step', PAD.left + cw2 / 2, GH - 1);
 }
 
+function drawGraphAxes(PAD, cw2, ch2){
+  gctx.strokeStyle = 'rgba(255,255,255,0.18)';
+  gctx.lineWidth = 0.8;
+  gctx.setLineDash([]);
+  gctx.beginPath();
+  gctx.moveTo(PAD.left, PAD.top);
+  gctx.lineTo(PAD.left, PAD.top + ch2);
+  gctx.lineTo(PAD.left + cw2, PAD.top + ch2);
+  gctx.stroke();
+}
+
+/* ── stats + history record ── */
 function updateStats(){
   let s=0,f=0,c=0,b=0;
   for(const nd of nodes){
@@ -386,11 +608,71 @@ function updateStats(){
     else if(nd.state===CO) c++;
     else b++;
   }
-  document.getElementById('s-sus').textContent = s;
+  document.getElementById('s-sus').textContent  = s;
   document.getElementById('s-fake').textContent = f;
-  document.getElementById('s-cor').textContent = c;
+  document.getElementById('s-cor').textContent  = c;
   document.getElementById('s-both').textContent = b;
   return {s,f,c,b};
+}
+
+function recordHistory(){
+  let s=0,f=0,c=0,b=0;
+  for(const nd of nodes){
+    if(nd.state===S) s++;
+    else if(nd.state===F) f++;
+    else if(nd.state===CO) c++;
+    else b++;
+  }
+  histS.push(s); histF.push(f); histCO.push(c); histB.push(b);
+}
+
+function clearHistory(){
+  histF=[]; histCO=[]; histB=[]; histS=[];
+}
+
+/* ── simulation step ── */
+function simStep(){
+  if(fakeSource<0||corSource<0) return;
+  const corrDelay = parseInt(document.getElementById('sl-cd').value);
+  if(!corActivated && step >= corrDelay) {
+    corActivated = true;
+    nodes[corSource].state = CO;
+  }
+  const next = nodes.map(nd => nd.state);
+  const fp = parseFloat(document.getElementById('sl-fp').value);
+  const cp = parseFloat(document.getElementById('sl-cp').value);
+  for(let i=0; i<nodes.length; i++){
+    const cur = nodes[i].state;
+    let gf=false, gc=false;
+    for(const j of adj[i]){
+      const ns = nodes[j].state;
+      const logFactor = Math.log(nodes[j].deg + 1);
+      const actualFp = Math.min(1, fp * logFactor);
+      const actualCp = Math.min(1, cp * logFactor);
+      if(ns===F && Math.random()<actualFp) gf=true;
+      if((ns===CO||ns===B) && Math.random()<actualCp) gc=true;
+    }
+    if(cur===S){
+      if(gc) next[i]=CO;
+      else if(gf) next[i]=F;
+    } else if(cur===F && gc) {
+      next[i]=B;
+    }
+  }
+  for(let i=0;i<nodes.length;i++) nodes[i].state=next[i];
+  step++;
+  document.getElementById('s-step').textContent = step;
+
+  if(!corActivated) {
+    const remaining = corrDelay - step;
+    modeEl.textContent = `▶ Running… Time until fact-check starts: t=${corrDelay} (${remaining} steps remaining)`;
+  } else {
+    modeEl.textContent = `▶ Running… (Fact-check Activated)`;
+  }
+
+  recordHistory();
+  draw();
+  drawGraph();
 }
 
 function checkEndCondition(){
@@ -400,11 +682,10 @@ function checkEndCondition(){
     if(nd.state===CO) c++;
     else if(nd.state===B) b++;
   }
-  const correctedRatio = (c + b) / total;
-  if(correctedRatio >= 0.9) return true;
-  return false;
+  return (c + b) / total >= 0.9;
 }
 
+/* ── click on network canvas ── */
 canvas.addEventListener('click', function(e){
   if(pickPhase===2) return;
   const rect = canvas.getBoundingClientRect();
@@ -433,12 +714,18 @@ canvas.addEventListener('click', function(e){
         document.getElementById('btn-step').disabled=false;
         document.getElementById('btn-reset').disabled=false;
         hintEl.style.opacity='0';
+        // Record initial state
+        clearHistory();
+        recordHistory();
       }
-      draw(); return;
+      draw();
+      drawGraph();
+      return;
     }
   }
 });
 
+/* ── buttons ── */
 const btnRun = document.getElementById('btn-run');
 btnRun.addEventListener('click', function(){
   if(autoTimer){
@@ -482,13 +769,314 @@ document.getElementById('btn-reset').addEventListener('click', function(){
     else { nodes[corSource].state=S; corActivated=false; }
   }
   step=0; document.getElementById('s-step').textContent=0;
+  clearHistory();
+  recordHistory();
   draw();
+  drawGraph();
   const corrDelay = parseInt(document.getElementById('sl-cd').value);
   modeEl.textContent = corrDelay===0 ? '⟳ Reset complete.' : `⟳ Reset complete. Fact-check starts on t=${corrDelay}.`;
 });
 
 document.getElementById('btn-rebuild').addEventListener('click', ()=>init());
 
+/* ── Export Layout + Settings JSON ── */
+document.getElementById('btn-export-layout').addEventListener('click', function(){
+  if(nodes.length === 0){
+    showToast('⚠ No network to export yet.');
+    return;
+  }
+  const payload = {
+    // ── settings block: all slider values ──
+    settings: readSettings(),
+    // ── layout block ──
+    nodes: nodes.map(nd => ({ id: nd.id, x: Math.round(nd.x * 10) / 10, y: Math.round(nd.y * 10) / 10, deg: nd.deg })),
+    edges: edges.map(([a, b]) => [nodes[a].id, nodes[b].id]),
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.download = `layout_n${nodes.length}_step${step}.json`;
+  link.href = url;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  showToast(`✓ Exported ${nodes.length} nodes + settings`);
+});
+
+/* ── Import JSON layout ── */
+document.getElementById('btn-import-json').addEventListener('click', ()=>{
+  document.getElementById('file-input').click();
+});
+
+document.getElementById('file-input').addEventListener('change', function(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    try {
+      const data = JSON.parse(ev.target.result);
+      loadLayoutFromJSON(data);
+    } catch(err) {
+      document.getElementById('import-status').textContent = '✗ Invalid JSON';
+      setTimeout(()=>document.getElementById('import-status').textContent='', 3000);
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+});
+
+/**
+ * JSON schema accepted by this function:
+ * {
+ *   "settings": {               ← OPTIONAL — all keys optional
+ *     "nodes":       100,       number of nodes (30–150)
+ *     "connections": 2,         m₀ (1–5)
+ *     "fakeProb":    0.40,      disinformation spread probability (0.05–1)
+ *     "correctProb": 0.25,      fact-check spread probability (0.05–1)
+ *     "corrDelay":   1,         fact-check start step (0–10)
+ *     "autoSpeed":   600        auto-run interval in ms (100–1500)
+ *   },
+ *   "nodes": [                  ← REQUIRED
+ *     { "id": 0, "x": 120, "y": 300 },
+ *     ...
+ *   ],
+ *   "edges": [                  ← REQUIRED
+ *     [0, 1], [1, 2], ...
+ *   ]
+ * }
+ *
+ * Any subset of "settings" keys is accepted; missing keys keep current slider values.
+ * If "nodes"/"edges" are absent the import is rejected with an error message.
+ */
+function loadLayoutFromJSON(data){
+  const statusEl = document.getElementById('import-status');
+
+  if(!data.nodes || !Array.isArray(data.nodes) || !data.edges || !Array.isArray(data.edges)){
+    statusEl.textContent = '✗ Missing nodes/edges arrays';
+    setTimeout(()=>statusEl.textContent='', 3000);
+    return;
+  }
+
+  if(autoTimer){ clearInterval(autoTimer); autoTimer=null; btnRun.textContent='▶ Auto Start'; }
+
+  // ── 1. Apply settings (partial or full) ──
+  const appliedKeys = applySettings(data.settings) || [];
+
+  // Reset simulation state
+  fakeSource=-1; corSource=-1; step=0; pickPhase=0; corActivated=false;
+  document.getElementById('fnode').textContent='None';
+  document.getElementById('cnode').textContent='None';
+  document.getElementById('btn-run').disabled=true;
+  document.getElementById('btn-step').disabled=true;
+  document.getElementById('btn-reset').disabled=true;
+  document.getElementById('s-step').textContent=0;
+  hintEl.style.opacity='1';
+  clearHistory();
+
+  const n = data.nodes.length;
+
+  // Resize canvas based on current container
+  resize();
+  resizeGraph();
+
+  // ── 2. Build node list ──
+  nodes = data.nodes.map((nd, idx) => ({
+    id:    nd.id  !== undefined ? nd.id  : idx,
+    x:     nd.x   !== undefined ? nd.x   : W / 2,
+    y:     nd.y   !== undefined ? nd.y   : H / 2,
+    vx: 0, vy: 0,
+    deg:   nd.deg !== undefined ? nd.deg : 0,
+    state: S,
+  }));
+
+  // Build id→index map for edge lookup
+  const idToIdx = {};
+  nodes.forEach((nd, i) => idToIdx[nd.id] = i);
+
+  edges = [];
+  adj   = nodes.map(() => []);
+
+  for(const e of data.edges){
+    if(!Array.isArray(e) || e.length < 2) continue;
+    const ai = idToIdx[e[0]], bi = idToIdx[e[1]];
+    if(ai === undefined || bi === undefined) continue;
+    edges.push([ai, bi]);
+    // Only increment deg if not already stored in JSON (deg === 0 means it wasn't provided)
+    if(!data.nodes[ai]?.deg){ nodes[ai].deg++; }
+    if(!data.nodes[bi]?.deg){ nodes[bi].deg++; }
+    adj[ai].push(bi);
+    adj[bi].push(ai);
+  }
+
+  // Re-compute deg from adjacency if it wasn't in JSON
+  const hasDeg = data.nodes.some(nd => nd.deg !== undefined && nd.deg > 0);
+  if(!hasDeg){
+    for(const nd of nodes) nd.deg = adj[nd.id]?.length || 0;
+  }
+
+  // ── 3. Normalise coordinates into current canvas ──
+  const pad = 35;
+  const xs = nodes.map(nd => nd.x), ys = nodes.map(nd => nd.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const rangeX = maxX - minX || 1, rangeY = maxY - minY || 1;
+  const usableW = W - pad * 2, usableH = H - pad * 2;
+
+  const needsScale = maxX > W || maxY > H || minX < 0 || minY < 0;
+  if(needsScale){
+    const scale = Math.min(usableW / rangeX, usableH / rangeY);
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    for(const nd of nodes){
+      nd.x = W / 2 + (nd.x - cx) * scale;
+      nd.y = H / 2 + (nd.y - cy) * scale;
+    }
+  }
+
+  // Update the node-count slider label (visual only — network is from JSON)
+  const slN = document.getElementById('sl-n');
+  slN.value = Math.min(Math.max(n, parseInt(slN.min)), parseInt(slN.max));
+  document.getElementById('lbl-n').textContent = slN.value;
+
+  draw();
+  drawGraph();
+  updateStats();
+
+  // Status message
+  const settingsNote = appliedKeys.length > 0
+    ? ` · Settings applied: ${appliedKeys.join(', ')}`
+    : '';
+  statusEl.textContent = `✓ Loaded ${n} nodes, ${edges.length} edges${settingsNote}`;
+  setTimeout(()=>statusEl.textContent='', 6000);
+
+  showToast(appliedKeys.length > 0
+    ? `✓ Layout + ${appliedKeys.length} setting(s) loaded`
+    : `✓ Layout loaded (no settings block in JSON)`
+  );
+
+  modeEl.textContent='▶ Click a node to select the disinformation source.';
+}
+
+/* ── Export graph PNG ── */
+document.getElementById('btn-export-graph').addEventListener('click', function(){
+  const SCALE = 2;
+  const offscreen = document.createElement('canvas');
+  offscreen.width  = GW * SCALE;
+  offscreen.height = GH * SCALE;
+  const oc = offscreen.getContext('2d');
+  oc.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+
+  const PAD = { top: 18, right: 20, bottom: 36, left: 44 };
+  const cw2 = GW - PAD.left - PAD.right;
+  const ch2 = GH - PAD.top  - PAD.bottom;
+  const maxLen = histF.length;
+  const total  = nodes.length || 1;
+
+  oc.fillStyle = '#181b1d';
+  oc.fillRect(0, 0, GW, GH);
+
+  oc.strokeStyle = 'rgba(255,255,255,0.06)';
+  oc.lineWidth = 0.8;
+  const yTicks = [0, 0.25, 0.5, 0.75, 1.0];
+  for(const yt of yTicks){
+    const py = PAD.top + ch2 * (1 - yt);
+    oc.beginPath(); oc.moveTo(PAD.left, py); oc.lineTo(PAD.left + cw2, py); oc.stroke();
+    oc.fillStyle = 'rgba(180,180,180,0.55)';
+    oc.font = '9px sans-serif';
+    oc.textAlign = 'right'; oc.textBaseline = 'middle';
+    oc.fillText(Math.round(yt * total), PAD.left - 5, py);
+  }
+
+  if(maxLen < 2){
+    oc.fillStyle = 'rgba(150,150,150,0.35)';
+    oc.font = '12px sans-serif';
+    oc.textAlign = 'center'; oc.textBaseline = 'middle';
+    oc.fillText('No data — run the simulation first', PAD.left + cw2/2, PAD.top + ch2/2);
+  } else {
+    function exportLine(hist, color, dashed){
+      if(!hist || hist.length < 2) return;
+      oc.beginPath(); oc.strokeStyle = color; oc.lineWidth = 1.8;
+      if(dashed) oc.setLineDash([4,3]); else oc.setLineDash([]);
+      for(let i=0; i<hist.length; i++){
+        const px = PAD.left + (i / (maxLen-1)) * cw2;
+        const py = PAD.top  + ch2 * (1 - hist[i] / total);
+        if(i===0) oc.moveTo(px,py); else oc.lineTo(px,py);
+      }
+      oc.stroke(); oc.setLineDash([]);
+    }
+    function exportDot(hist, color){
+      if(!hist || hist.length < 1) return;
+      const i  = hist.length - 1;
+      const px = PAD.left + (i / Math.max(maxLen-1,1)) * cw2;
+      const py = PAD.top  + ch2 * (1 - hist[i] / total);
+      oc.beginPath(); oc.arc(px, py, 3.5, 0, Math.PI*2);
+      oc.fillStyle = color; oc.fill();
+      oc.fillStyle = color; oc.font = '9px sans-serif';
+      oc.textAlign = 'left'; oc.textBaseline = 'middle';
+      oc.fillText(hist[i], px+5, py);
+    }
+    exportLine(histS, 'rgba(113,128,150,0.7)', true);
+    exportLine(histF,  '#e53e3e', false);
+    exportLine(histCO, '#38a169', false);
+    exportLine(histB,  '#d69e2e', false);
+    exportDot(histF,  '#e53e3e');
+    exportDot(histCO, '#38a169');
+    exportDot(histB,  '#d69e2e');
+
+    oc.fillStyle = 'rgba(180,180,180,0.55)';
+    oc.font = '9px sans-serif'; oc.textAlign = 'center'; oc.textBaseline = 'top';
+    const xTicks = Math.min(maxLen-1, 8);
+    for(let t=0; t<=xTicks; t++){
+      const idx = Math.round(t / xTicks * (maxLen-1));
+      const px  = PAD.left + (idx / (maxLen-1)) * cw2;
+      oc.fillText(idx, px, PAD.top + ch2 + 5);
+    }
+  }
+
+  oc.strokeStyle = 'rgba(255,255,255,0.18)';
+  oc.lineWidth = 0.8; oc.setLineDash([]);
+  oc.beginPath();
+  oc.moveTo(PAD.left, PAD.top);
+  oc.lineTo(PAD.left, PAD.top + ch2);
+  oc.lineTo(PAD.left + cw2, PAD.top + ch2);
+  oc.stroke();
+
+  oc.fillStyle = 'rgba(180,180,180,0.4)';
+  oc.font = '9px sans-serif'; oc.textAlign = 'center'; oc.textBaseline = 'bottom';
+  oc.fillText('Step', PAD.left + cw2/2, GH - 1);
+
+  const legendItems = [
+    { color:'#e53e3e', label:'Disinformation' },
+    { color:'#38a169', label:'Fact-checked' },
+    { color:'#d69e2e', label:'Cured' },
+    { color:'rgba(113,128,150,0.7)', label:'No Data' },
+  ];
+  let lx = PAD.left;
+  oc.font = '9px sans-serif'; oc.textBaseline = 'middle';
+  for(const item of legendItems){
+    oc.fillStyle = item.color;
+    oc.fillRect(lx, 5, 16, 3);
+    oc.fillStyle = item.color;
+    oc.textAlign = 'left';
+    oc.fillText(item.label, lx + 20, 6.5);
+    lx += oc.measureText(item.label).width + 36;
+  }
+
+  oc.fillStyle = 'rgba(255,255,255,0.3)';
+  oc.font = '8px sans-serif'; oc.textAlign = 'right'; oc.textBaseline = 'bottom';
+  const now = new Date();
+  // Embed current settings in watermark
+  const s = readSettings();
+  oc.fillText(
+    `Exported ${now.toLocaleString()}  |  Steps: ${step}  |  Nodes: ${nodes.length}  |  fakeP: ${s.fakeProb}  correctP: ${s.correctProb}  delay: ${s.corrDelay}`,
+    GW - 6, GH - 1
+  );
+
+  const link = document.createElement('a');
+  link.download = `spread_graph_step${step}.png`;
+  link.href = offscreen.toDataURL('image/png');
+  link.click();
+});
+
+/* ── range sliders ── */
 document.getElementById('sl-n').oninput=e=>document.getElementById('lbl-n').textContent=e.target.value;
 document.getElementById('sl-m').oninput=e=>document.getElementById('lbl-m').textContent=e.target.value;
 document.getElementById('sl-fp').oninput=e=>document.getElementById('lbl-fp').textContent=parseFloat(e.target.value).toFixed(2);
@@ -496,6 +1084,7 @@ document.getElementById('sl-cp').oninput=e=>document.getElementById('lbl-cp').te
 document.getElementById('sl-cd').oninput=e=>document.getElementById('lbl-cd').textContent=e.target.value;
 document.getElementById('sl-spd').oninput=e=>document.getElementById('lbl-spd').textContent=e.target.value+'ms';
 
+/* ── init ── */
 function init(){
   if(autoTimer){ clearInterval(autoTimer); autoTimer=null; btnRun.textContent='▶ Auto Start'; }
   fakeSource=-1; corSource=-1; step=0; pickPhase=0; corActivated=false;
@@ -506,17 +1095,20 @@ function init(){
   document.getElementById('btn-reset').disabled=true;
   document.getElementById('s-step').textContent=0;
   hintEl.style.opacity='1';
+  clearHistory();
   loadEl.style.display='flex';
   loadMsg.textContent='Calculating…';
   modeEl.textContent='Calculating…';
   setTimeout(()=>{
     resize();
+    resizeGraph();
     const n = parseInt(document.getElementById('sl-n').value);
     const m = parseInt(document.getElementById('sl-m').value);
     buildTopology(n, m);
     computeLayout();
     loadEl.style.display='none';
     draw();
+    drawGraph();
     updateStats();
     modeEl.textContent='▶ Click a node to select the disinformation source.';
   }, 30);
@@ -526,9 +1118,11 @@ window.addEventListener('resize', ()=>{
   if(nodes.length===0) return;
   const oldW=W, oldH=H;
   resize();
+  resizeGraph();
   const sx=W/oldW, sy=H/oldH;
   for(const nd of nodes){ nd.x*=sx; nd.y*=sy; }
   draw();
+  drawGraph();
 });
 
 init();
