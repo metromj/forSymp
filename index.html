@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+<title>Main — Disinformation Spread</title>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Main — Disinformation Spread</title>
 <style>
 body{
 border-top: 10px solid #805ad5;
@@ -133,6 +133,7 @@ nav a:hover{
 <li class="navigation"><a href="#"><b>Main</b></a></li>
 <li class="navigation"><a href="parallel.html">Parallel Execution</a></li>
 <li class="navigation"><a href="repetition.html">Repetition</a></li>
+<li class="navigation"><a href="visual.html">Visualization</a></li>
 </ul>
 </nav>
 </header>
@@ -157,13 +158,13 @@ nav a:hover{
   <div class="ctrl-panel">
     <div class="cs">
       <div class="ct">Network</div>
-      <div class="cr"><label>Number of nodes</label><input type="range" id="sl-n" min="30" max="150" value="100" step="1"><span id="lbl-n">100</span></div>
+      <div class="cr"><label>Number of nodes</label><input type="range" id="sl-n" min="30" max="200" value="100" step="1"><span id="lbl-n">100</span></div>
       <div class="cr"><label>Number of connections(m₀)</label><input type="range" id="sl-m" min="1" max="5" value="2" step="1"><span id="lbl-m">2</span></div>
     </div>
     <div class="cs">
       <div class="ct">Probability of spreading <span style="font-size:9px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(p × ln(connections + 1))</span></div>
-      <div class="cr"><label>Disinformation</label><input type="range" id="sl-fp" min="0.05" max="1" value="0.40" step="0.05"><span id="lbl-fp">0.40</span></div>
-      <div class="cr"><label>Fact-checks</label><input type="range" id="sl-cp" min="0.05" max="1" value="0.25" step="0.05"><span id="lbl-cp">0.25</span></div>
+      <div class="cr"><label>Disinformation</label><input type="range" id="sl-fp" min="0.01" max="0.5" value="0.30" step="0.01"><span id="lbl-fp">0.30</span></div>
+      <div class="cr"><label>Fact-checks</label><input type="range" id="sl-cp" min="0.01" max="0.5" value="0.15" step="0.01"><span id="lbl-cp">0.15</span></div>
     </div>
     <div class="cs">
       <div class="ct">Timing</div>
