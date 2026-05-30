@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visualization — Disinformation Spread</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:var(--color-background-tertiary);
+  --surface:var(--color-background-secondary);
+  --surface2:var(--color-background-primary);
+  --border:var(--color-border-tertiary);
+  --border2:var(--color-border-secondary);
+  --text:var(--color-text-primary);
+  --muted:var(--color-text-secondary);
+  --fake:#e53e3e;--correct:#38a169;--both:#d69e2e;--sus:#4a5568;
+  --r:10px;
+  --accent:#805ad5;
+}
+body{
+  border-top: 10px solid var(--accent);
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-sans,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif);
+  padding: 12px 0 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.page{width:100%;max-width:1100px;padding:0 14px;}
+
+/* ── header ── */
+.navigation{ list-style: none; }
+nav ul{ display:flex; flex-direction:row; padding:10px; }
+nav a{ margin:20px; }
+nav a:link{ color:var(--accent); text-decoration:none; }
+nav a:visited{ color:var(--accent); }
+nav a:hover{ color:#565656; }
+
+/* ── upload zone — matches repetition.html ── */
+.upload-section{
+  background:var(--surface);
+  border:0.5px solid var(--border);
+  border-radius:var(--r);
+  padding:18px 18px 14px;
+  margin-bottom:12px;
+  width:100%;
+  max-width:1100px;
+  padding-left:14px;
+  padding-right:14px;
+}
+.upload-title{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:10px;font-weight:500;}
+
+.load-area{
+  display:flex;
+  align-items:stretch;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-bottom:12px;
+}
+.drop-zone{
+  flex:1;
+  min-width:200px;
+  background:var(--surface2);
+  border:0.5px dashed var(--border2);
+  border-radius:8px;
+  padding:14px 18px;
+  cursor:pointer;
+  transition:border-color .15s, background .15s;
+  display:flex;align-items:center;gap:12px;
+  position:relative;
+}
+.drop-zone input[type=file]{
+  position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;
+}
+.drop-zone:hover{ border-color:var(--accent); background:#00000008; }
+.drop-zone.loaded{ border-color:var(--accent); border-style:solid; }
+.drop-zone.loaded:hover{ background:#00000008; }
+.dz-icon{ font-size:22px; flex-shrink:0; }
+.dz-label{ font-size:13px; color:var(--muted); }
+.dz-filename{ font-size:12px; color:var(--text); font-weight:500; margin-top:2px; }
+.dz-meta{ font-size:10px; color:var(--muted); margin-top:1px; }
+
+/* schema panel beside drop zone */
+.schema-panel{
+  min-width:220px;
+  max-width:320px;
+  flex-shrink:0;
+  background:var(--surface2);
+  border:0.5px solid var(--border);
+  border-radius:8px;
+  padding:12px 14px;
+  font-size:11px;
+  color:var(--muted);
+  line-height:1.7;
+  display:none;
+}
+.schema-panel.visible{ display:block; }
+.schema-panel strong{ font-size:11px; color:var(--text); display:block; margin-bottom:6px; }
+.schema-panel code{
+  background:color-mix(in srgb,var(--accent) 10%,var(--surface));
+  padding:1px 5px;border-radius:3px;
+  font-family:'SF Mono','Fira Code',monospace;font-size:10px;color:var(--text);
+}
+
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+button{
+  font-size:12px;font-family:inherit;
+  padding:6px 14px;border-radius:8px;
+  border:0.5px solid var(--border2);
+  background:transparent;color:var(--text);
+  cursor:pointer;transition:background .1s;
+}
+button:hover{background:var(--surface2);}
+#btn-schema{ border-color:var(--accent); color:var(--accent); }
+#btn-schema:hover{ background:color-mix(in srgb,var(--accent) 8%,transparent); }
+#btn-reset{ border-color:var(--muted); color:var(--muted); }
+#btn-reset:hover{ background:#00000008; }
+.status-msg{ font-size:11px; color:var(--accent); font-style:italic; margin-left:6px; }
+.status-msg.ok{ color:#38a169; }
+.status-msg.err{ color:#e53e3e; }
+
+/* ── 3D canvas ── */
+#canvas-wrap{
+  position: relative;
+  width: 100%;
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+#canvas-container{
+  width: 100%;
+  height: 560px;
+}
+canvas{ display:block; }
+
+/* overlays */
+#legend {
+  position: absolute;
+  bottom: 20px; right: 18px;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 5px;
+  pointer-events: none; color:#919191;
+}
+#legend-bar {
+  width: 160px; height: 12px; border-radius: 3px;
+  background: linear-gradient(to right,
+    #0a2a6e,#0d4fa8,#0e7fc0,#0fa3b1,
+    #3abf8a,#a8d84e,#f5e642,#f5a623,#e8421a,#8b0000);
+  border: 0.5px solid var(--border);
+}
+#legend-labels{
+  display:flex; justify-content:space-between; width:160px;
+  font-size:10px; color:var(--muted); letter-spacing:.04em;
+}
+#legend-title{
+  font-size:10px; color:var(--muted); letter-spacing:.08em;
+  text-transform:uppercase; text-align:right; margin-bottom:1px;
+}
+#axis-labels{
+  position:absolute; bottom:20px; left:18px;
+  font-size:10px; letter-spacing:.06em;
+  line-height:1.8; pointer-events:none;
+}
+#axis-labels span{ display:block; }
+#axis-labels b{font-weight:600; }
+#hint{
+  color:#919191; position:absolute; top:14px; right:18px;
+  font-size:10px; letter-spacing:.07em; text-align:right;
+  line-height:1.9; text-transform:uppercase; pointer-events:none;
+}
+#tooltip{
+  position:absolute; color:#919191;
+  background:rgba(0,0,0,0.82);
+  border:0.5px solid var(--border2);
+  border-radius:6px; padding:7px 11px;
+  font-size:11px; pointer-events:none; display:none;
+  z-index:20; letter-spacing:.05em; line-height:1.8;
+  backdrop-filter:blur(6px);
+}
+
+/* ── info card ── */
+.info-card{
+  background:var(--surface);
+  border:0.5px solid var(--border);
+  border-radius:var(--r);
+  padding:12px 16px;
+  margin-bottom:10px;
+  display:flex; flex-wrap:wrap; gap:10px 28px; align-items:center;
+}
+.info-item{ display:flex; flex-direction:column; gap:2px; }
+.info-label{ font-size:10px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); }
+.info-val{ font-size:13px; font-weight:500; color:var(--text); }
+
+.zcolor{color:#3D784D;}
+.ycolor{color:#3B5B83;}
+.xcolor{color:#966F42;}
+
+/* ── toast ── */
+.toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  background:rgba(30,30,30,0.92);
+  border:0.5px solid rgba(128,90,213,0.6);
+  border-radius:8px;padding:8px 18px;
+  font-size:12px;color:#c4b5fd;
+  pointer-events:none;opacity:0;transition:opacity .3s;
+  z-index:999;white-space:nowrap;
+}
+.toast.show{opacity:1;}
+
+.ftr{ padding:10px; font-size:10pt; color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Disinformation Spread Visualization</h1>
+  <nav>
+    <ul>
+      <li class="navigation"><a href="index.html">Main</a></li>
+      <li class="navigation"><a href="parallel.html">Parallel Execution</a></li>
+      <li class="navigation"><a href="repetition.html">Repetition</a></li>
+      <li class="navigation"><a href="visual.html"><b>Visualization</b></a></li>
+    </ul>
+  </nav>
+</header>
+
+<!-- Upload section -->
+<div class="upload-section page">
+  <div class="upload-title">Load JSON Data — 3D Surface Visualization</div>
+  <div class="load-area">
+    <!-- Drop zone -->
+    <div class="drop-zone" id="drop-zone">
+      <input type="file" id="json-file-input" accept=".json" />
+      <div class="dz-icon" id="dz-icon">📂</div>
+      <div class="dz-text">
+        <div class="dz-label" id="dz-label">Click to load a data JSON</div>
+        <div class="dz-filename" id="dz-filename"></div>
+        <div class="dz-meta" id="dz-meta"></div>
+      </div>
+    </div>
+    <!-- Schema panel -->
+    <div class="schema-panel" id="schema-panel">
+      <strong>Accepted JSON formats</strong>
+      <b>① 2D array</b> — rows = C<sub>d</sub>, cols = t<br>
+      <code>[[1.9, 2.4, ...], [5.9, 4.1, ...], ...]</code>
+      <br><br>
+      <b>② Object with metadata</b><br>
+      <code>{ "scenario": "…",<br>&nbsp;"cd_range": [0.001, 0.01],<br>&nbsp;"t_range": [1, 10],<br>&nbsp;"data": [[…], …] }</code>
+    </div>
+  </div>
+  <div class="btn-row">
+    <button id="btn-schema">? JSON Format</button>
+    <button id="btn-reset" id="btn-reset">✕ Reset to Demo</button>
+    <span class="status-msg" id="status-msg">Using built-in demo data</span>
+  </div>
+</div>
+
+<div class="page">
+
+  <div id="canvas-wrap">
+    <div id="canvas-container"></div>
+
+    <div id="hint">
+      Left click & drag — rotate<br>
+      Right click & drag / scroll — zoom<br>
+      Middle click & drag — pan<br>
+      Hover — show details
+    </div>
+
+    <div id="axis-labels">
+      <span id="ax-cd" class="xcolor">0.001 → 0.010</span>
+      <span id="ax-t" class="ycolor">1 → 10</span>
+      <span class="zcolor"><b>Z</b> — Nodes exposed</span>
+    </div>
+
+    <div id="legend">
+      <div id="legend-title">Nodes Exposed</div>
+      <div id="legend-bar"></div>
+      <div id="legend-labels">
+        <span>0</span>
+        <span id="leg-mid">90</span>
+        <span id="leg-max">175</span>
+      </div>
+    </div>
+
+    <div id="tooltip"></div>
+  </div>
+
+  <div class="info-card">
+    <div class="info-item">
+      <span class="info-label">Scenario</span>
+      <span class="info-val" id="ic-scenario">Disinformation: Popular · Correction: Popular</span>
+    </div>
+    <div class="info-item">
+      <span class="info-label">C<sub>d</sub> range</span>
+      <span class="info-val" id="ic-cd">0.001 – 0.010</span>
+    </div>
+    <div class="info-item">
+      <span class="info-label">Time steps</span>
+      <span class="info-val" id="ic-t">1 – 10</span>
+    </div>
+    <div class="info-item">
+      <span class="info-label">Max nodes exposed</span>
+      <span class="info-val" id="ic-max">175.8</span>
+    </div>
+    <div class="info-item">
+      <span class="info-label">Grid size</span>
+      <span class="info-val" id="ic-grid">10 × 10</span>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="ftr">
+  Copyright © 2026 Myungjae Lee, Code written with the help of Claude
+</div>
+
+<script>
+// ── Default data ──
+const DEFAULT_DATA = [
+  [1.9,2.4,3.1,4.6,3.7,2.8,3.3,7.5,6.8,5.6],
+  [5.9,4.1,7.4,12.4,10.7,5.5,12.4,23.4,21.6,18.6],
+  [9.2,8.8,19.5,10.8,34.3,27.8,35.6,37.2,57.9,66.7],
+  [17.5,27.1,20.1,46.5,48,41.1,66.4,65.1,78.2,88.3],
+  [31.6,46.3,34.5,66.7,76.8,78.9,92.8,104.2,92.7,121.6],
+  [36.8,56.5,47.1,82.1,90.8,104.5,92,116.4,130.8,137.2],
+  [39.5,52.8,55.2,83.5,109.1,123.8,124.6,128.6,146.3,159.9],
+  [46.6,76.1,84.3,101,124.4,140.9,141.8,143.1,161.4,166],
+  [69.3,80,126.3,121.6,144.7,149.6,153.7,160,165.8,169.2],
+  [90.2,109,114.9,139,154.3,150.3,164.8,169,170.2,175.8]
+];
+const DEFAULT_META = {
+  scenario: 'Disinformation: Popular · Correction: Popular',
+  cd_range: [0.001, 0.010],
+  t_range: [1, 10]
+};
+
+let currentData = DEFAULT_DATA;
+let currentMeta = { ...DEFAULT_META };
+
+// ── Toast ──
+function showToast(msg, dur=2800){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), dur);
+}
+
+// ── Schema toggle ──
+document.getElementById('btn-schema').addEventListener('click', () => {
+  const panel = document.getElementById('schema-panel');
+  panel.classList.toggle('visible');
+  document.getElementById('btn-schema').textContent =
+    panel.classList.contains('visible') ? '✕ Hide Format' : '? JSON Format';
+});
+
+// ── Reset button ──
+document.getElementById('btn-reset').addEventListener('click', () => {
+  currentData = DEFAULT_DATA;
+  currentMeta = { ...DEFAULT_META };
+  rebuildScene();
+  updateInfoCard();
+  updateDropZone(false);
+  setStatus('Using built-in demo data', '');
+  showToast('✓ Reset to demo data');
+});
+
+// ── Drop zone UI ──
+function updateDropZone(loaded, filename, meta) {
+  const dz = document.getElementById('drop-zone');
+  if (loaded) {
+    dz.classList.add('loaded');
+    document.getElementById('dz-icon').textContent = '✅';
+    document.getElementById('dz-label').textContent = 'Data loaded — click to replace';
+    document.getElementById('dz-filename').textContent = filename;
+    document.getElementById('dz-meta').textContent = meta || '';
+  } else {
+    dz.classList.remove('loaded');
+    document.getElementById('dz-icon').textContent = '📂';
+    document.getElementById('dz-label').textContent = 'Click to load a data JSON';
+    document.getElementById('dz-filename').textContent = '';
+    document.getElementById('dz-meta').textContent = '';
+  }
+}
+
+function setStatus(msg, cls) {
+  const el = document.getElementById('status-msg');
+  el.textContent = msg;
+  el.className = 'status-msg' + (cls ? ' ' + cls : '');
+}
+
+// ── File input ──
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('json-file-input');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('loaded'); });
+dropZone.addEventListener('dragleave', () => { if (!currentData || currentData === DEFAULT_DATA) dropZone.classList.remove('loaded'); });
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+  e.target.value = '';
+});
+
+function handleFile(file) {
+  if (!file.name.endsWith('.json')) {
+    setStatus('✗ Only .json files are supported', 'err');
+    showToast('✗ Only .json files are supported');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      const { data, meta } = parseJsonData(parsed);
+      currentData = data;
+      currentMeta = meta;
+      rebuildScene();
+      updateInfoCard();
+      const metaStr = `${data.length} rows × ${data[0].length} cols · max ${flatMax(data).toFixed(1)}`;
+      updateDropZone(true, file.name, metaStr);
+      setStatus(`✓ Loaded "${file.name}"`, 'ok');
+      showToast(`✓ Loaded: ${file.name}`);
+    } catch (err) {
+      setStatus(`✗ ${err.message}`, 'err');
+      showToast(`✗ ${err.message}`);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function flatMax(data) {
+  let m = -Infinity;
+  for (const row of data) for (const v of row) if (v > m) m = v;
+  return m;
+}
+
+function parseJsonData(parsed) {
+  let raw, meta = {};
+  if (Array.isArray(parsed)) {
+    raw = parsed;
+  } else if (parsed && Array.isArray(parsed.data)) {
+    raw = parsed.data;
+    if (parsed.scenario) meta.scenario = parsed.scenario;
+    if (Array.isArray(parsed.cd_range) && parsed.cd_range.length === 2) meta.cd_range = parsed.cd_range;
+    if (Array.isArray(parsed.t_range)  && parsed.t_range.length  === 2) meta.t_range  = parsed.t_range;
+  } else {
+    throw new Error('JSON must be a 2D array or an object with a "data" field.');
+  }
+  if (!raw.length || !Array.isArray(raw[0]))
+    throw new Error('"data" must be a 2D array of numbers.');
+  const cols = raw[0].length;
+  for (let i = 0; i < raw.length; i++) {
+    if (!Array.isArray(raw[i]) || raw[i].length !== cols)
+      throw new Error(`Row ${i} has wrong length (expected ${cols}).`);
+    for (let j = 0; j < raw[i].length; j++)
+      if (typeof raw[i][j] !== 'number')
+        throw new Error(`Non-numeric value at [${i}][${j}]: "${raw[i][j]}"`);
+  }
+  if (!meta.cd_range) meta.cd_range = [0.001, +(0.001 * raw.length).toFixed(3)];
+  if (!meta.t_range)  meta.t_range  = [1, cols];
+  if (!meta.scenario) meta.scenario = 'Custom data';
+  return { data: raw, meta };
+}
+
+function updateInfoCard() {
+  const rows = currentData.length, cols = currentData[0].length;
+  const maxVal = flatMax(currentData);
+  document.getElementById('ic-scenario').textContent = currentMeta.scenario;
+  document.getElementById('ic-cd').textContent = `${currentMeta.cd_range[0]} – ${currentMeta.cd_range[1]}`;
+  document.getElementById('ic-t').textContent  = `${currentMeta.t_range[0]} – ${currentMeta.t_range[1]}`;
+  document.getElementById('ic-max').textContent = maxVal.toFixed(1);
+  document.getElementById('ic-grid').textContent = `${rows} × ${cols}`;
+  document.getElementById('ax-t').textContent  = `Y — Time step (t : ${currentMeta.t_range[0]} → ${currentMeta.t_range[1]})`;
+  document.getElementById('ax-cd').textContent = `X — ` + `C_d ` + `(${currentMeta.cd_range[0]} → ${currentMeta.cd_range[1]})`;
+  document.getElementById('leg-max').textContent = `${maxVal.toFixed(0)}`;
+  document.getElementById('leg-mid').textContent = `${(maxVal / 2).toFixed(0)}`;
+}
+
+// ── Three.js ──
+const container = document.getElementById('canvas-container');
+let W = container.clientWidth, H = container.clientHeight;
+
+const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(W, H);
+renderer.shadowMap.enabled = true;
+container.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+function getSceneBg(){
+  const c = getComputedStyle(document.body).backgroundColor;
+  if(c && c !== 'rgba(0, 0, 0, 0)' && c !== 'transparent') return c;
+  return '#111315';
+}
+scene.background = new THREE.Color(getSceneBg());
+scene.fog = new THREE.FogExp2(scene.background.getHex(), 0.011);
+
+const camera = new THREE.PerspectiveCamera(45, W/H, 0.1, 1000);
+camera.position.set(18,14,22);
+camera.lookAt(0,2,0);
+
+let surfaceMesh=null, wireMesh=null, axisLines=[], gridHelper=null;
+let lightDir1, lightDir2, lightPt;
+
+function valueToColor(v, minVal, maxVal){
+  const t = Math.max(0, Math.min(1, (v-minVal)/(maxVal-minVal)));
+  const stops = [
+    [0.00,[0.04,0.16,0.43]],[0.11,[0.05,0.31,0.66]],[0.22,[0.05,0.50,0.75]],
+    [0.33,[0.06,0.64,0.69]],[0.44,[0.23,0.75,0.54]],[0.55,[0.66,0.85,0.30]],
+    [0.66,[0.96,0.90,0.26]],[0.77,[0.96,0.65,0.14]],[0.88,[0.91,0.26,0.10]],
+    [1.00,[0.55,0.00,0.00]],
+  ];
+  let i=0;
+  while(i<stops.length-2 && stops[i+1][0]<=t) i++;
+  const [t0,c0]=stops[i],[t1,c1]=stops[i+1];
+  const f=(t-t0)/(t1-t0);
+  return new THREE.Color(c0[0]+f*(c1[0]-c0[0]),c0[1]+f*(c1[1]-c0[1]),c0[2]+f*(c1[2]-c0[2]));
+}
+
+function buildSurfaceGeometry(rawData) {
+  const ROWS=rawData.length, COLS=rawData[0].length;
+  let maxVal=-Infinity, minVal=Infinity;
+  for(const row of rawData) for(const v of row){ if(v>maxVal)maxVal=v; if(v<minVal)minVal=v; }
+
+  const SUBDIV=5;
+  const gridX=(COLS-1)*SUBDIV+1, gridZ=(ROWS-1)*SUBDIV+1;
+
+  function bilinearSample(ci,ri){
+    const ci0=Math.max(0,Math.min(COLS-1,Math.floor(ci))), ri0=Math.max(0,Math.min(ROWS-1,Math.floor(ri)));
+    const ci1=Math.min(COLS-1,ci0+1), ri1=Math.min(ROWS-1,ri0+1);
+    const fx=ci-ci0, fz=ri-ri0;
+    return rawData[ri0][ci0]*(1-fx)*(1-fz)+rawData[ri0][ci1]*fx*(1-fz)+rawData[ri1][ci0]*(1-fx)*fz+rawData[ri1][ci1]*fx*fz;
+  }
+
+  const scaleX=14/(COLS-1), scaleZ=10/(ROWS-1), scaleY=9/maxVal;
+  const geometry=new THREE.BufferGeometry();
+  const positions=[],colors=[],normals=[],uvs=[];
+
+  for(let iz=0;iz<gridZ;iz++){
+    for(let ix=0;ix<gridX;ix++){
+      const ci=ix/SUBDIV, ri=iz/SUBDIV;
+      const val=bilinearSample(ci,ri);
+      const x=(ix/(gridX-1))*(COLS-1)*scaleX-(COLS-1)*scaleX/2;
+      const y=val*scaleY;
+      const z=(iz/(gridZ-1))*(ROWS-1)*scaleZ-(ROWS-1)*scaleZ/2;
+      positions.push(x,y,z);
+      const c=valueToColor(val,minVal,maxVal);
+      colors.push(c.r,c.g,c.b);
+      normals.push(0,1,0);
+      uvs.push(ix/(gridX-1),iz/(gridZ-1));
+    }
+  }
+  const indices=[];
+  for(let iz=0;iz<gridZ-1;iz++){
+    for(let ix=0;ix<gridX-1;ix++){
+      const a=iz*gridX+ix,b=iz*gridX+ix+1,c=(iz+1)*gridX+ix,d=(iz+1)*gridX+ix+1;
+      indices.push(a,b,c,b,d,c);
+    }
+  }
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));
+  geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return { geometry, scaleX, scaleZ, scaleY, ROWS, COLS, maxVal };
+}
+
+function makeAxis(from,to,color){
+  const mat=new THREE.LineBasicMaterial({color,opacity:0.55,transparent:true});
+  const geo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...from),new THREE.Vector3(...to)]);
+  return new THREE.Line(geo,mat);
+}
+
+let sceneParams = {};
+
+function rebuildScene() {
+  if(surfaceMesh){ scene.remove(surfaceMesh); surfaceMesh.geometry.dispose(); }
+  if(wireMesh)   { scene.remove(wireMesh);    wireMesh.geometry.dispose(); }
+  axisLines.forEach(l=>scene.remove(l)); axisLines=[];
+  if(gridHelper) scene.remove(gridHelper);
+
+  const {geometry,scaleX,scaleZ,scaleY,ROWS,COLS,maxVal}=buildSurfaceGeometry(currentData);
+  sceneParams={scaleX,scaleZ,scaleY,ROWS,COLS,maxVal};
+
+  const material=new THREE.MeshPhongMaterial({vertexColors:true,side:THREE.DoubleSide,shininess:55,specular:new THREE.Color(0x223344)});
+  surfaceMesh=new THREE.Mesh(geometry,material); scene.add(surfaceMesh);
+
+  const wireMat=new THREE.MeshBasicMaterial({color:0x0a1525,wireframe:true,opacity:0.15,transparent:true});
+  wireMesh=new THREE.Mesh(geometry,wireMat); scene.add(wireMesh);
+
+  gridHelper=new THREE.GridHelper(20,20,0x222a33,0x181f26);
+  gridHelper.position.y=-0.05; scene.add(gridHelper);
+
+  const ox=-(COLS-1)*scaleX/2, oz=-(ROWS-1)*scaleZ/2;
+  axisLines.push(makeAxis([ox,0,oz],[ox+(COLS-1)*scaleX+1,0,oz],0x4488cc));
+  axisLines.push(makeAxis([ox,0,oz],[ox,maxVal*scaleY+0.5,oz],0x44cc88));
+  axisLines.push(makeAxis([ox,0,oz],[ox,0,oz+(ROWS-1)*scaleZ+1],0xcc8844));
+  axisLines.forEach(l=>scene.add(l));
+}
+
+// ── Lighting ──
+scene.add(new THREE.AmbientLight(0x0a1525,1.8));
+lightDir1=new THREE.DirectionalLight(0xc8e0ff,1.2); lightDir1.position.set(10,20,10); scene.add(lightDir1);
+lightDir2=new THREE.DirectionalLight(0xff8833,0.5); lightDir2.position.set(-10,5,-10); scene.add(lightDir2);
+lightPt=new THREE.PointLight(0x805ad5,0.6,40); lightPt.position.set(0,15,0); scene.add(lightPt);
+
+rebuildScene();
+updateInfoCard();
+
+// ── Orbit controls ──
+let isDragging=false,isRight=false,isMid=false;
+let prevMouse={x:0,y:0};
+let spherical={theta:Math.PI/4,phi:Math.PI/3.5,radius:30};
+let target=new THREE.Vector3(0,3,0);
+
+function updateCamera(){
+  camera.position.set(
+    -target.x+spherical.radius*Math.sin(spherical.phi)*Math.sin(spherical.theta),
+    -target.y+spherical.radius*Math.cos(spherical.phi),
+    -target.z+spherical.radius*Math.sin(spherical.phi)*Math.cos(spherical.theta)
+  );
+  camera.lookAt(target);
+}
+updateCamera();
+
+renderer.domElement.addEventListener('mousedown',e=>{
+  isDragging=true; isRight=e.button===2; isMid=e.button===1;
+  prevMouse={x:e.clientX,y:e.clientY}; e.preventDefault();
+});
+renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
+window.addEventListener('mousemove',e=>{
+  if(!isDragging) return;
+  const dx=e.clientX-prevMouse.x, dy=e.clientY-prevMouse.y;
+  prevMouse={x:e.clientX,y:e.clientY};
+  if(isRight||isMid){
+    const ps=spherical.radius*0.001;
+    const right=new THREE.Vector3();
+    right.crossVectors(new THREE.Vector3(0,1,0),camera.position.clone().sub(target).normalize()).normalize();
+    target.addScaledVector(right,dx*ps);
+    target.addScaledVector(new THREE.Vector3(0,1,0),-dy*ps);
+  } else {
+    spherical.theta-=dx*0.007;
+    spherical.phi=Math.max(0.08,Math.min(Math.PI/2,spherical.phi-dy*0.007));
+  }
+  updateCamera();
+});
+window.addEventListener('mouseup',()=>isDragging=false);
+renderer.domElement.addEventListener('wheel',e=>{
+  spherical.radius=Math.max(5,Math.min(80,spherical.radius+e.deltaY*0.04));
+  updateCamera(); e.preventDefault();
+},{passive:false});
+
+let lastTouchDist=null;
+renderer.domElement.addEventListener('touchstart',e=>{
+  if(e.touches.length===1){isDragging=true;prevMouse={x:e.touches[0].clientX,y:e.touches[0].clientY};}
+});
+renderer.domElement.addEventListener('touchmove',e=>{
+  if(e.touches.length===2){
+    const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    if(lastTouchDist) spherical.radius=Math.max(5,Math.min(80,spherical.radius-(d-lastTouchDist)*0.05));
+    lastTouchDist=d; updateCamera(); return;
+  }
+  if(!isDragging||e.touches.length!==1) return;
+  const dx=e.touches[0].clientX-prevMouse.x, dy=e.touches[0].clientY-prevMouse.y;
+  prevMouse={x:e.touches[0].clientX,y:e.touches[0].clientY};
+  spherical.theta-=dx*0.007;
+  spherical.phi=Math.max(0.08,Math.min(Math.PI/2,spherical.phi-dy*0.007));
+  updateCamera();
+},{passive:false});
+renderer.domElement.addEventListener('touchend',()=>{isDragging=false;lastTouchDist=null;});
+
+// ── Tooltip ──
+const raycaster=new THREE.Raycaster();
+const mouse2d=new THREE.Vector2();
+const tooltip=document.getElementById('tooltip');
+
+renderer.domElement.addEventListener('mousemove',e=>{
+  if(!surfaceMesh) return;
+  const {scaleX,scaleZ,scaleY,ROWS,COLS}=sceneParams;
+  const rect=renderer.domElement.getBoundingClientRect();
+  mouse2d.x=((e.clientX-rect.left)/rect.width)*2-1;
+  mouse2d.y=-((e.clientY-rect.top)/rect.height)*2+1;
+  raycaster.setFromCamera(mouse2d,camera);
+  const hits=raycaster.intersectObject(surfaceMesh);
+  if(hits.length){
+    const p=hits[0].point;
+    const normX=(p.x+(COLS-1)*scaleX/2)/((COLS-1)*scaleX);
+    const normZ=(p.z+(ROWS-1)*scaleZ/2)/((ROWS-1)*scaleZ);
+    const [t0,t1]=currentMeta.t_range;
+    const [cd0,cd1]=currentMeta.cd_range;
+    const tApprox=t0+normX*(t1-t0);
+    const cdApprox=cd0+normZ*(cd1-cd0);
+    const nodeVal=p.y/scaleY;
+    tooltip.style.display='block';
+    tooltip.style.left=(e.clientX-rect.left+14)+'px';
+    tooltip.style.top=(e.clientY-rect.top-14)+'px';
+    tooltip.innerHTML=`C<sub>d</sub> ≈ ${cdApprox.toFixed(3)}<br>t ≈ ${tApprox.toFixed(1)}<br><b>Exposure: ${nodeVal.toFixed(1)}</b>`;
+  } else {
+    tooltip.style.display='none';
+  }
+});
+
+window.addEventListener('resize',()=>{
+  W=container.clientWidth; H=container.clientHeight;
+  renderer.setSize(W,H);
+  camera.aspect=W/H;
+  camera.updateProjectionMatrix();
+});
+
+function animate(){ requestAnimationFrame(animate); renderer.render(scene,camera); }
+animate();
+</script>
+</body>
+</html>
