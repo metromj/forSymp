@@ -212,6 +212,8 @@ canvas{ display:block; }
 .toast.show{opacity:1;}
 
 .ftr{ padding:10px; font-size:10pt; color:var(--muted); }
+
+#subexp{text-transform: lowercase;}
 </style>
 </head>
 <body>
@@ -295,7 +297,7 @@ canvas{ display:block; }
       <span class="info-val" id="ic-scenario">Disinformation: Popular · Correction: Popular</span>
     </div>
     <div class="info-item">
-      <span class="info-label">C<sub>d</sub> range</span>
+      <span class="info-label">C<sub id="subexp">m</sub> range</span>
       <span class="info-val" id="ic-cd">0.001 – 0.010</span>
     </div>
     <div class="info-item">
@@ -317,7 +319,8 @@ canvas{ display:block; }
 <div class="toast" id="toast"></div>
 
 <div class="ftr">
-  Copyright © 2026 Myungjae Lee, Code written with the help of Claude
+  Copyright © 2026 Myungjae Lee, Code written with the help of Claude<br>
+  Version 1.1 (2026.05.31.)
 </div>
 
 <script>
@@ -479,7 +482,7 @@ function updateInfoCard() {
   document.getElementById('ic-max').textContent = maxVal.toFixed(1);
   document.getElementById('ic-grid').textContent = `${rows} × ${cols}`;
   document.getElementById('ax-t').textContent  = `Y — Time step (t : ${currentMeta.t_range[0]} → ${currentMeta.t_range[1]})`;
-  document.getElementById('ax-cd').textContent = `X — ` + `C_d ` + `(${currentMeta.cd_range[0]} → ${currentMeta.cd_range[1]})`;
+  document.getElementById('ax-cd').textContent = `X — ` + `C_m ` + `(${currentMeta.cd_range[0]} → ${currentMeta.cd_range[1]})`;
   document.getElementById('leg-max').textContent = `${maxVal.toFixed(0)}`;
   document.getElementById('leg-mid').textContent = `${(maxVal / 2).toFixed(0)}`;
 }
